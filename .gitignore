@@ -1,0 +1,14 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+final.gpkg
+credentials_biodiversity.json
+.idea
+token.pickle
+pyproject.toml
+# Virtual environments
+.venv
