@@ -12,10 +12,12 @@ This tool automates the process of:
 Before starting, make sure:
 - You have Python installed (version 3.9 or later is recommended)
 - Your computer has internet access
+- Download this set of code into your preferred directory
 - You’ve installed the required Python packages (see below)
 
-### 🛠️ Installation (Optional)
+### 🛠️ Installation (2 Options)
 
+Option 1: 
 1. Open **Command Prompt**.
 2. Run this command to install required packages:
 
@@ -23,7 +25,7 @@ Before starting, make sure:
 pip install pandas geopandas fiona google-api-python-client google-auth google-auth-oauthlib openpyxl
 ```
 
-Or:
+Or Option 2:
 
 **Double-click `initial_run.bat`**  
    This installs the necessary packages.
@@ -49,11 +51,12 @@ Or:
 
 3. **Click “Download Files”**  
    This downloads all `.gpkg` files from the shared Google Drive.
+   Note: A json file containing credentials must be in the same directory as the program files. Contact me for more information regarding this.
 
-4. **Click “Run GPKG Processing Pipeline”**  
+5. **Click “Run GPKG Processing Pipeline”**  
    This updates all the `.gpkg` files based on the Excel sheet and species CSV, merges them, removes duplicates, and saves the final file.
 
-5. (Optional) **Click “Delete All Files in the Google Folder”**  
+6. (Optional) **Click “Delete All Files in the Google Folder”**  
    This will delete all `.gpkg` files from the Google Drive folder to avoid duplicates on the next upload cycle.
 
 ## Files Overview
@@ -72,11 +75,11 @@ Or:
 
 - The tool automatically remembers your last entries.
 
-## 🔐 First-Time Setup (Google Drive Access)
+## First-Time Setup (Google Drive Access)
 
 The first time you run this, a browser window will open asking you to sign in with your Google account. Grant access so the app can read your shared folder.
 
-## 🛑 Troubleshooting
+## Troubleshooting
 
 - If you see **authentication errors**, delete the `token.pickle` file and restart the program.
 - If the window closes immediately, try running `initial_run.bat` to see error messages.
