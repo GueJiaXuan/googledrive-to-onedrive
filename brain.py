@@ -198,58 +198,62 @@ def merge_gpkg_files(input_dir, output_file):
 
     print(f"Successfully created {output_file} with {len(merged_gdf)} features")
 
-def remove_duplicates_from_gpkg(input_file, output_dir):
+def remove_duplicates_from_gpkg(merged_gdf, output_dir, subset=None):
     """
-    Removes duplicate records from a GeoPackage file and saves the result to a new file.
+    Merges given GeoDataFrame into an existing GPKG file, removes duplicates, and updates the first layer in place.
 
     Input:
-    input_file (str): Path to the input .gpkg file
-    output_file (str, optional): Path to the output .gpkg file. Defaults to input_file + '_no_duplicates'
-    subset (list, optional): Columns to check for duplicates. Defaults to all columns.
+    merged_gdf (GeoDataFrame): Data to append into the GPKG file.
+    output_dir (str): Path to the existing .gpkg file to update.
+    subset (list, optional): Columns to check for duplicates. Defaults to ['geometry', 'species', 'observer'].
 
     Output:
     bool: True if successful, False otherwise
     """
-    if output_dir:
+    try:
+        # Ensure output directory exists
         os.makedirs(os.path.dirname(output_dir), exist_ok=True)
 
-    try:
-        print(f"Reading {input_file}...")
-        gdf = gpd.read_file(input_file)
-        original_count = len(gdf)
-        print(f"Successfully read {input_file} with {original_count} features")
+        # Get first layer name in the file
+        layers = fiona.listlayers(output_dir)
+        if not layers:
+            raise ValueError(f"No layers found in {output_dir}")
+        layer_name = layers[0]
+        print(f"Using first layer: '{layer_name}'")
 
-        if output_dir and os.path.exists(output_dir):
-            df_extra = gpd.read_file(output_dir)
-            print(f"Read {len(df_extra)} features from {output_dir}")
+        # Read existing layer
+        existing_gdf = gpd.read_file(output_dir, layer=layer_name)
+        print(f"Read {len(existing_gdf)} features from existing file")
 
-            target_crs = "EPSG:4326"
+        # Reproject if needed
+        target_crs = "EPSG:4326"
+        if existing_gdf.crs and existing_gdf.crs.to_string() != target_crs:
+            print(f"Reprojecting existing data from {existing_gdf.crs} to {target_crs}")
+            existing_gdf = existing_gdf.to_crs(target_crs)
+        if merged_gdf.crs and merged_gdf.crs.to_string() != target_crs:
+            print(f"Reprojecting merged data from {merged_gdf.crs} to {target_crs}")
+            merged_gdf = merged_gdf.to_crs(target_crs)
 
-            if df_extra.crs and df_extra.crs.to_string() != target_crs:
-                print(f"Reprojecting output file from {df_extra.crs} to {target_crs}")
-                df_extra = df_extra.to_crs(target_crs)
-
-            # Combine the data
-            df = pd.concat([gdf, df_extra], ignore_index=True)
-            print(f"Combined total: {len(df)} features")
+        # Combine the datasets
+        combined = pd.concat([existing_gdf, merged_gdf], ignore_index=True)
+        print(f"Combined total: {len(combined)} features")
 
         # Remove duplicates
-        print("Removing duplicates...")
-        gdf_no_duplicates = gdf.drop_duplicates(subset=['geometry', 'species', 'observer'])
+        if subset is None:
+            subset = ['geometry', 'species', 'observer']
+        print(f"Removing duplicates using subset: {subset}")
+        deduped = combined.drop_duplicates(subset=subset)
+        print(f"Resulting features after deduplication: {len(deduped)}")
 
-        #gdf_no_duplicates = gdf.drop_duplicates(subset=subset, keep='first')
-        removed_count = original_count - len(gdf_no_duplicates)
+        # Remove and overwrite the original layer
+        with fiona.Env():
+            fiona.remove(output_dir, layer=layer_name, driver="GPKG")
+        deduped.to_file(output_dir, layer=layer_name, driver="GPKG")
 
-        # Save to a new file
-        print(f"Saving data without duplicates to {output_dir}...")
-        gdf_no_duplicates.to_file(output_dir, driver="GPKG")
-
-        print(f"Successfully created {output_dir} with {len(gdf_no_duplicates)} features")
-        print(f"Removed {removed_count} duplicate features")
-
+        print(f"Successfully updated {output_dir} with deduplicated data")
         return True
     except Exception as e:
-        print(f"Error processing {input_file}: {str(e)}")
+        print(f"Error updating {output_dir}: {str(e)}")
         return False
 
 def update_excel_log(directory, timestamp, files_processed, total_merged, final_saved, note):
