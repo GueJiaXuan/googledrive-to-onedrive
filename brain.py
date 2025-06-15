@@ -6,34 +6,6 @@ import re
 import fiona
 from datetime import datetime
 
-
-# def get_last_timestamp_from_log(directory = ""):
-#     """
-#     Retrieves the last (most recent) timestamp from log.xlsx in the directory.
-#
-#     Input:
-#     directory (str): Path to directory containing log.xlsx
-#
-#     Output:
-#     str or None: Last timestamp as a string, or None if no log or no timestamps found
-#     """
-#     log_path = os.path.join(directory, "log.xlsx")
-#
-#     if not os.path.exists(log_path):
-#         print("No log.xlsx file found.")
-#         return None
-#
-#     try:
-#         log_df = pd.read_excel(log_path)
-#         if 'timestamp' not in log_df.columns or log_df.empty:
-#             print("log.xlsx has no 'timestamp' column or is empty.")
-#             return None
-#         last_timestamp = log_df['timestamp'].iloc[-1]
-#         return str(last_timestamp)
-#     except Exception as e:
-#         print(f"Error reading log.xlsx: {str(e)}")
-#         return None
-
 def update_observer_and_species_in_gpkg(directory, species_csv):
     """
     Updates the 'observer' column in .gpkg files using an Excel sheet and replaces
@@ -46,12 +18,6 @@ def update_observer_and_species_in_gpkg(directory, species_csv):
     Output:
     None (updates files in place)
     """
-    # Get last timestamp from log
-    #last_logged_timestamp = get_last_timestamp_from_log(directory)
-    # if last_logged_timestamp:
-    #     print(f"Filtering Excel rows newer than last log timestamp: {last_logged_timestamp}")
-    # else:
-    #     print("No previous log timestamp found. Processing all Excel rows.")
 
     # Load species mapping CSV
     species_df = pd.read_csv(species_csv, encoding='ISO-8859-1')
@@ -67,23 +33,6 @@ def update_observer_and_species_in_gpkg(directory, species_csv):
     # Read Excel data
     df = pd.read_excel(excel_file)
 
-    # # Ensure Excel has a 'timestamp' column (adjust this to your actual column name)
-    # if 'timestamp' not in df.columns:
-    #     print("Error: Excel file has no 'timestamp' column.")
-    #     return
-    #
-    # # Convert Excel timestamp column to datetime
-    # df['timestamp'] = pd.to_datetime(df['timestamp'])
-    #
-    # # Filter rows newer than last logged timestamp
-    # if last_logged_timestamp:
-    #     df = df[df['timestamp'] > last_logged_timestamp]
-    #
-    # if df.empty:
-    #     print("No new Excel rows found after last logged timestamp.")
-    #     return
-
-    # Build mapping: file_id → observer name
     id_to_name = {}
     for _, row in df.iterrows():
         links_cell = row['Upload your gpkg files here']
@@ -136,184 +85,68 @@ def update_observer_and_species_in_gpkg(directory, species_csv):
         gdf.to_file(file_path, driver="GPKG", layer=layer_name)
         print(f"Saved updates to {file_name}")
 
-def merge_gpkg_files(input_dir, output_file):
-    """
-    Merges .gpkg files from a directory, using only the layer matching the file name, and saves as a new .gpkg.
+def clean_geometry_and_observer(gdf):
+    if gdf.crs and gdf.crs.to_string() != "EPSG:4326":
+        gdf = gdf.to_crs("EPSG:4326")
+    if "observer" in gdf.columns:
+        gdf = gdf.rename(columns={"observer": "obs"})
+    if "geometry" in gdf.columns:
+        gdf = gdf.rename(columns={"geometry": "geom"})
+    gdf = gdf.set_geometry("geom")
+    if "geometry" in gdf.columns:
+        gdf = gdf.drop(columns="geometry")
+    return gdf
 
-    Input:
-    input_dir (str): Path to the directory containing .gpkg files
-    output_file (str): Path to the output .gpkg file
+def load_main_data(filepath):
+    layer_name = os.path.splitext(os.path.basename(filepath))[0]
+    gdf = gpd.read_file(filepath, layer=layer_name)
+    gdf = clean_geometry_and_observer(gdf)
+    print(f"Main file '{filepath}' loaded with {len(gdf)} records from layer '{layer_name}'")
+    return gdf
 
-    Output:
-    None (saves merged file)
-    """
-    # Get all .gpkg files in the directory
-    gpkg_files = glob.glob(os.path.join(input_dir, "*.gpkg"))
-
-    if not gpkg_files:
-        print(f"No .gpkg files found in {input_dir}")
-        return
-
-    print(f"Found {len(gpkg_files)} .gpkg files in {input_dir}")
-
-    # List to store all geodataframes
-    all_gdf = []
-
-    # Read each .gpkg file using the layer that matches the file name (without extension)
-    for file in gpkg_files:
-        file_name = os.path.basename(file)
-        layer_name = os.path.splitext(file_name)[0]
-
+def load_student_data(directory):
+    gpkg_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(".gpkg")]
+    combined = []
+    for path in gpkg_files:
         try:
-            layers = fiona.listlayers(file)
-            if layer_name not in layers:
-                print(f"Warning: {file} does not have a layer named '{layer_name}'. Skipping.")
-                continue
-
-            print(f"Reading {file}, layer '{layer_name}'...")
-            gdf = gpd.read_file(file, layer=layer_name)
-
-            target_crs = "EPSG:4326"
-            if gdf.crs and gdf.crs.to_string() != target_crs:
-                print(f"Reprojecting {file} from {gdf.crs} to {target_crs}")
-                gdf = gdf.to_crs(target_crs)
-
-            all_gdf.append(gdf)
-            print(f"Successfully read {file}, layer '{layer_name}' with {len(gdf)} features")
-
+            layer_name = fiona.listlayers(path)[0]
+            gdf = gpd.read_file(path, layer=layer_name)
+            gdf = clean_geometry_and_observer(gdf)
+            combined.append(gdf)
+            print(f"Student file '{path}' loaded with {len(gdf)} records from layer '{layer_name}'")
         except Exception as e:
-            print(f"Error reading {file}: {str(e)}")
-
-    if not all_gdf:
-        print("No data was read from the files")
-        return
-
-    # Concatenate all geodataframes
-    print("Merging all files...")
-    merged_gdf = pd.concat(all_gdf, ignore_index=True)
-
-    # Save to a new file
-    print(f"Saving merged data to {output_file}...")
-    merged_gdf.to_file(output_file, driver="GPKG")
-
-    print(f"Successfully created {output_file} with {len(merged_gdf)} features")
-
-def remove_duplicates_from_gpkg(merged_gdf, output_dir, subset=None):
-    """
-    Merges given GeoDataFrame into an existing GPKG file, removes duplicates, and updates the first layer in place.
-
-    Input:
-    merged_gdf (GeoDataFrame): Data to append into the GPKG file.
-    output_dir (str): Path to the existing .gpkg file to update.
-    subset (list, optional): Columns to check for duplicates. Defaults to ['geometry', 'species', 'observer'].
-
-    Output:
-    bool: True if successful, False otherwise
-    """
-    try:
-        # Ensure output directory exists
-        os.makedirs(os.path.dirname(output_dir), exist_ok=True)
-
-        # Get first layer name in the file
-        layers = fiona.listlayers(output_dir)
-        if not layers:
-            raise ValueError(f"No layers found in {output_dir}")
-        layer_name = layers[0]
-        print(f"Using first layer: '{layer_name}'")
-
-        # Read existing layer
-        existing_gdf = gpd.read_file(output_dir, layer=layer_name)
-        print(f"Read {len(existing_gdf)} features from existing file")
-
-        # Reproject if needed
-        target_crs = "EPSG:4326"
-        if existing_gdf.crs and existing_gdf.crs.to_string() != target_crs:
-            print(f"Reprojecting existing data from {existing_gdf.crs} to {target_crs}")
-            existing_gdf = existing_gdf.to_crs(target_crs)
-        if merged_gdf.crs and merged_gdf.crs.to_string() != target_crs:
-            print(f"Reprojecting merged data from {merged_gdf.crs} to {target_crs}")
-            merged_gdf = merged_gdf.to_crs(target_crs)
-
-        # Combine the datasets
-        combined = pd.concat([existing_gdf, merged_gdf], ignore_index=True)
-        print(f"Combined total: {len(combined)} features")
-
-        # Remove duplicates
-        if subset is None:
-            subset = ['geometry', 'species', 'observer']
-        print(f"Removing duplicates using subset: {subset}")
-        deduped = combined.drop_duplicates(subset=subset)
-        print(f"Resulting features after deduplication: {len(deduped)}")
-
-        # Remove and overwrite the original layer
-        with fiona.Env():
-            fiona.remove(output_dir, layer=layer_name, driver="GPKG")
-        deduped.to_file(output_dir, layer=layer_name, driver="GPKG")
-
-        print(f"Successfully updated {output_dir} with deduplicated data")
-        return True
-    except Exception as e:
-        print(f"Error updating {output_dir}: {str(e)}")
-        return False
-
-def update_excel_log(directory, timestamp, files_processed, total_merged, final_saved, note):
-    """
-    Update or create an Excel log file to record processing summary.
-
-    Input:
-    directory (str): Path to directory
-    timestamp (str): Timestamp string (same format as Excel sheet)
-    files_processed (int): Number of gpkg files processed
-    total_merged (int): Number of gpkg rows merged
-    final_saved (int): Number of gpkg rows saved after deduplication
-    note (str): Additional note or message
-    """
-    log_path = os.path.join(os.path.dirname(directory), "log.xlsx")
-    log_columns = ['timestamp', 'files_processed', 'total_gpkg_rows_merged', 'final_rows_saved', 'note']
-
-    # Prepare new log row
-    new_log = pd.DataFrame([{
-        'timestamp': timestamp,
-        'files_processed': files_processed,
-        'total_gpkg_rows_merged': total_merged,
-        'final_rows_saved': final_saved,
-        'note': note
-    }])
-
-    # If log exists, append; otherwise create
-    if os.path.exists(log_path):
-        existing_log = pd.read_excel(log_path)
-        updated_log = pd.concat([existing_log, new_log], ignore_index=True)
+            print(f"Skipping '{path}': {e}")
+    if combined:
+        combined_gdf = pd.concat(combined, ignore_index=True)
+        print(f"Total combined student records: {len(combined_gdf)}")
+        return combined_gdf
     else:
-        updated_log = new_log
+        print("No valid student GPKG files found.")
+        return None
 
-    updated_log.to_excel(log_path, index=False)
-    print(f"Updated {log_path}")
+def merge_and_update_main(main_gdf, student_gdf, output_path):
+    subset = ["geom", "species", "obs"]
+    student_gdf = student_gdf.drop_duplicates()
 
-def run_pipeline(directory, species_csv, output_gpkg_path, output_merged="final.gpkg", log_note="Run completed"):
-    """
-    Executes the full processing pipeline:
-    1. Updates GPKG files using Excel and species CSV
-    2. Merges all GPKG layers
-    3. Removes duplicates from merged file and saves output to specified directory
-    4. Logs summary to Excel
+    def is_duplicate(row):
+        return ((main_gdf[subset] == row[subset]).all(axis=1)).any()
 
-    Input:
-    directory (str): Path to input directory with .gpkg and .xlsx files
-    species_csv (str): Path to species mapping CSV
-    output_dir (str): Directory to save the merged and deduplicated output GPKG files
-    output_merged (str, optional): Output filename for merged GPKG. Defaults to "final.gpkg"
-    output_dedup (str, optional): Output filename for deduplicated GPKG. Defaults to "final_no_duplicates.gpkg"
-    log_note (str, optional): Note to include in the log entry. Defaults to "Run completed"
+    new_data = student_gdf[~student_gdf.apply(is_duplicate, axis=1)]
 
-    Output:
-    None
-    """
+    if not new_data.empty:
+        print(f"Appending {len(new_data)} new records to main GPKG")
+        new_data.to_file(output_path, layer=os.path.splitext(os.path.basename(output_path))[0], driver="GPKG", mode="a")
+    else:
+        print("No new records to append.")
+
+
+def run_pipeline(directory, species_csv, main_file):
+
     from brain import (
         update_observer_and_species_in_gpkg,
-        merge_gpkg_files,
-        remove_duplicates_from_gpkg,
-        update_excel_log,
+        load_main_data,
+        load_student_data,
+        merge_and_update_main,
     )
 
     # Validate Excel
@@ -324,59 +157,19 @@ def run_pipeline(directory, species_csv, output_gpkg_path, output_merged="final.
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Step 1: Update gpkg files
+    # Step 1: Update Gpkg Files in the Directory
     update_observer_and_species_in_gpkg(directory, species_csv)
 
-    # Step 2: Merge updated files
-    merge_gpkg_files(directory, output_merged)
+    # Step 2: Find Main File
+    main = load_main_data(main_file)
 
-    # Step 3: Remove duplicates
-    remove_duplicates_from_gpkg(output_merged, output_dir=output_gpkg_path)
+    # Step 3: Combine Gpkg Files in the Directory
+    student = load_student_data(directory)
 
-    # Step 4: Summarise stats
-    gpkg_files = glob.glob(os.path.join(directory, "*.gpkg"))
-    files_processed = len(gpkg_files)
-    merged_gdf = gpd.read_file(output_merged)
-    total_merged = len(merged_gdf)
-    final_gdf = gpd.read_file(output_gpkg_path)
-    final_saved = len(final_gdf)
-
-    # Step 5: Log results
-    update_excel_log(
-        output_gpkg_path,
-        timestamp,
-        files_processed,
-        total_merged,
-        final_saved,
-        note=log_note
-    )
+    # Step 4: Combine Main file and Student's File, Remove all Duplicates, and then append deduplicated data that is not
+    # present in the main file to the main file
+    merge_and_update_main(main, student, main_file)
 
 
-# if __name__ == "__main__":
-#     directory = "second_test"
-#     species_csv = "species.csv"
-#
-#     #Auto-detect the Excel filename
-#     excel_files = glob.glob(os.path.join(directory, "*.xlsx"))
-#     if len(excel_files) != 1:
-#         print("Error: There must be exactly one Excel file in the directory.")
-#         exit(1)
-#     excel_filename = os.path.basename(excel_files[0])
-#
-#     from datetime import datetime
-#     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-#
-#     update_observer_and_species_in_gpkg(directory, species_csv)
-#     merge_gpkg_files(directory, "final.gpkg")
-#     remove_duplicates_from_gpkg("final.gpkg", "final_no_duplicates.gpkg")
-#
-#     # Collect summary numbers
-#     gpkg_files = glob.glob(os.path.join(directory, "*.gpkg"))
-#     files_processed = len(gpkg_files)
-#     merged_gdf = gpd.read_file("final.gpkg")
-#     total_merged = len(merged_gdf)
-#     final_gdf = gpd.read_file("final_no_duplicates.gpkg")
-#     final_saved = len(final_gdf)
-#
-#     # Write to Excel log
-#     update_excel_log("", timestamp, files_processed, total_merged, final_saved, note="Run completed")
+
+
