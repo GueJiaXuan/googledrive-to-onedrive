@@ -55,8 +55,8 @@ def make_flagged_window():
     # 3) Compute 40% dimensions
     screen_w = root.winfo_screenwidth()
     screen_h = root.winfo_screenheight()
-    win_w = int(screen_w * 0.4)
-    win_h = int(screen_h * 0.6)
+    win_w = int(screen_w * 0.6)
+    win_h = int(screen_h * 1)
 
     # 4) Center offsets
     x = (screen_w - win_w) // 2
@@ -335,8 +335,8 @@ delete_button.pack(pady=10)
 
 # Add a text widget to display the logs/output from the auth function
 output_text = tk.Text(root, font=("Helvetica", 12), wrap=tk.WORD, height=10)
-output_text.configure(state=tk.DISABLED)  # Make it read-only initially
-output_text.pack(pady=10, padx=20)
+output_text.configure(state=tk.DISABLED)
+output_text.pack(fill=tk.BOTH, expand=True, pady=10, padx=20)
 
 # Fill in entry widget inputs
 load_settings()

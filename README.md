@@ -9,6 +9,8 @@ This tool automates the process of:
 
 ## Requirements
 
+For Microsoft Users: Please make sure you download Python from Microsoft Store NOT directly from Python site.
+
 Before starting, make sure:
 - You have Python installed (version 3.9 or later is recommended)
 - Your computer has internet access
@@ -16,8 +18,6 @@ Before starting, make sure:
 - You’ve installed the required Python packages (see below)
 
 ### 🛠️ Installation (2 Options)
-
-For Microsoft Users: Please make sure you download Python from Microsoft Store NOT directly from Python site.
 
 **Double-click `initial_run.bat`**  
    This installs the necessary packages for windows user.
