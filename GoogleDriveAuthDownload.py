@@ -47,8 +47,6 @@ def auth(root_folder_id, download_dir):
     print('Files saved to '+ download_dir)
 
 
-
-
 def process_folder(service, folder_id, parent_path):
     """
     Processes a Google Drive folder, downloading its files and recursively processing subfolders.

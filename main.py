@@ -65,6 +65,7 @@ def make_flagged_window():
     # 5) Apply size & position
     root.geometry(f'{win_w}x{win_h}+{x}+{y}')
 
+# Title
 
 root = tk.Tk()
 root.title("Google Drive Files Download")
@@ -81,96 +82,29 @@ logo_label.pack(anchor="center")  # Centered within the logo frame
 # Delay flags + sizing until window is realized
 root.after(0, make_flagged_window)
 
-# Create frames for each entry with its label
+# First Frame (Google Drive Folder ID)
 frame1 = tk.Frame(root)
 frame1.pack(fill=tk.X, pady=(10, 0), padx=20)
 
-frame2 = tk.Frame(root)
-frame2.pack(fill=tk.X, pady=(10, 0), padx=20)
-
-# Test content
+# Label (Google Drive Folder ID)
 label1 = tk.Label(frame1, text="Google Drive Folder ID:", font=("Helvetica", 14))
 label1.grid(row=0, column=0, padx=(0, 10))
 entry1 = tk.Entry(frame1, font=("Helvetica", 14))
 entry1.grid(row=0, column=1, sticky="ew")
 frame1.columnconfigure(1, weight=1)
 
+# Second Frame (Downloaded Folder Path. e.g. OneDrive folder path)
+frame2 = tk.Frame(root)
+frame2.pack(fill=tk.X, pady=(10, 0), padx=20)
+
+# Label (Downloaded Folder Path. e.g. OneDrive folder path)
 label2 = tk.Label(frame2, text="Downloaded Folder Path:", font=("Helvetica", 14))
 label2.grid(row=0, column=0, padx=(0, 10))
 entry2 = tk.Entry(frame2, font=("Helvetica", 14))
 entry2.grid(row=0, column=1, sticky="ew")
 frame2.columnconfigure(1, weight=1)
 
-# Frame for species.csv folder
-frame3 = tk.Frame(root)
-frame3.pack(fill=tk.X, pady=(10, 0), padx=20)
-
-label3 = tk.Label(frame3, text="Select species.csv file:", font=("Helvetica", 14))
-label3.grid(row=0, column=0, padx=(0, 10))
-
-entry3 = tk.Entry(frame3, font=("Helvetica", 14))
-entry3.grid(row=0, column=1, sticky="ew")
-frame3.columnconfigure(1, weight=1)
-
-# Frame for save output directory
-frame4 = tk.Frame(root)
-frame4.pack(fill=tk.X, pady=(10, 0), padx=20)
-
-label4 = tk.Label(frame4, text="Select Main.Gpkg File", font=("Helvetica", 14))
-label4.grid(row=0, column=0, padx=(0, 10))
-
-entry4 = tk.Entry(frame4, font=("Helvetica", 14))
-entry4.grid(row=0, column=1, sticky="ew")
-frame4.columnconfigure(1, weight=1)
-
-def select_species_csv_file():
-    from tkinter import filedialog
-    selected_file = filedialog.askopenfilename(
-        title="Select species.csv file",
-        parent=root,
-        filetypes=[("CSV Files", "*.csv")]
-    )
-    if selected_file:
-        entry3.delete(0, tk.END)
-        entry3.insert(0, selected_file)
-
-browse_species_button = tk.Button(
-    frame3,
-    text="...",
-    font=("Helvetica", 12),
-    command=select_species_csv_file,
-    width=3,
-    height=1,
-    relief="raised",
-    activebackground="#d9d9d9"
-)
-browse_species_button.grid(row=0, column=2, padx=(10, 0))
-
-def select_output_file():
-    from tkinter import filedialog
-    selected_file = filedialog.askopenfilename(
-        title="Select .gpkg File",
-        parent=root,
-        filetypes=[("GeoPackage", "*.gpkg")]
-    )
-    if selected_file:
-        entry4.delete(0, tk.END)
-        entry4.insert(0, selected_file)
-
-
-browse_output_button = tk.Button(
-    frame4,
-    text="...",
-    font=("Helvetica", 12),
-    command=select_output_file,
-    width=3,
-    height=1,
-    relief="raised",
-    activebackground="#d9d9d9"
-)
-browse_output_button.grid(row=0, column=2, padx=(10, 0))
-
-
+# Extra Logic and button for browsing (Downloaded Folder Path. e.g. OneDrive folder path)
 def select_directory():
     """
     Basically chooses a directory to download to.
@@ -194,8 +128,13 @@ browse_button = tk.Button(
 )
 browse_button.grid(row=0, column=2, padx=(10, 0))
 
-
+# Logic and button for First and Second Frame (Google Drive Folder ID to Downloaded Folder Path. e.g. OneDrive folder path)
 def submit():
+    """
+    Logic that takes the first frame, which is the Google Drive folder ID,
+    and downloads the files in the downloaded folder path
+    :return: NIL
+    """
     import sys
 
     class TextRedirector:
@@ -222,7 +161,6 @@ def submit():
     finally:
         sys.stdout = old_stdout  # Restore original stdout
 
-
 button = tk.Button(
     root,
     text="Download Files",
@@ -234,6 +172,78 @@ button = tk.Button(
 )
 button.pack(pady=20)
 
+# Third Frame (for species.csv folder)
+frame3 = tk.Frame(root)
+frame3.pack(fill=tk.X, pady=(10, 0), padx=20)
+
+# Third Label (for species.csv file)
+label3 = tk.Label(frame3, text="Select species.csv file:", font=("Helvetica", 14))
+label3.grid(row=0, column=0, padx=(0, 10))
+entry3 = tk.Entry(frame3, font=("Helvetica", 14))
+entry3.grid(row=0, column=1, sticky="ew")
+frame3.columnconfigure(1, weight=1)
+
+# Logic and button for Third Label (species.csv file)
+def select_species_csv_file():
+    from tkinter import filedialog
+    selected_file = filedialog.askopenfilename(
+        title="Select species.csv file",
+        parent=root,
+        filetypes=[("CSV Files", "*.csv")]
+    )
+    if selected_file:
+        entry3.delete(0, tk.END)
+        entry3.insert(0, selected_file)
+
+browse_species_button = tk.Button(
+    frame3,
+    text="...",
+    font=("Helvetica", 12),
+    command=select_species_csv_file,
+    width=3,
+    height=1,
+    relief="raised",
+    activebackground="#d9d9d9"
+)
+browse_species_button.grid(row=0, column=2, padx=(10, 0))
+
+
+# Fourth Frame (for saving output directory, aka selecting the main gpkg file)
+frame4 = tk.Frame(root)
+frame4.pack(fill=tk.X, pady=(10, 0), padx=20)
+
+label4 = tk.Label(frame4, text="Select Main.Gpkg File", font=("Helvetica", 14))
+label4.grid(row=0, column=0, padx=(0, 10))
+
+entry4 = tk.Entry(frame4, font=("Helvetica", 14))
+entry4.grid(row=0, column=1, sticky="ew")
+frame4.columnconfigure(1, weight=1)
+
+# Logic and button to select the output file (for saving output directory, aka selecting the main gpkg file)
+def select_output_file():
+    from tkinter import filedialog
+    selected_file = filedialog.askopenfilename(
+        title="Select .gpkg File",
+        parent=root,
+        filetypes=[("GeoPackage", "*.gpkg")]
+    )
+    if selected_file:
+        entry4.delete(0, tk.END)
+        entry4.insert(0, selected_file)
+
+browse_output_button = tk.Button(
+    frame4,
+    text="...",
+    font=("Helvetica", 12),
+    command=select_output_file,
+    width=3,
+    height=1,
+    relief="raised",
+    activebackground="#d9d9d9"
+)
+browse_output_button.grid(row=0, column=2, padx=(10, 0))
+
+# Logic for running the GPKG Processing Pipeline
 def run_pipeline_ui():
     import sys
 
@@ -278,7 +288,7 @@ pipeline_button = tk.Button(
 )
 pipeline_button.pack(pady=10)
 
-
+# Logic and Button for deleting google drive files (specifically gpkg files in OneDrive)
 def delete_files():
     import sys
 

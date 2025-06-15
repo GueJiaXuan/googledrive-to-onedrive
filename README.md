@@ -17,19 +17,12 @@ Before starting, make sure:
 
 ### 🛠️ Installation (2 Options)
 
-Option 1: 
-1. Open **Command Prompt**.
-2. Run this command to install required packages:
-
-```bash
-pip install pandas geopandas fiona google-api-python-client google-auth google-auth-oauthlib openpyxl
-```
-
-Or Option 2:
 
 **Double-click `initial_run.bat`**  
-   This installs the necessary packages.
+   This installs the necessary packages for windows user.
 
+**Double-click `initial_run.sh`**  
+   This installs the necessary packages for mac user.
 
 3. Place the following in a folder on your computer:
    - All `.py` files (`main.py`, `brain.py`, `GoogleDriveAuthDownload.py`)
