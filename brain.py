@@ -97,6 +97,29 @@ def clean_geometry_and_observer(gdf):
         gdf = gdf.drop(columns="geometry")
     return gdf
 
+
+def create_main_copy(filepath, destination_folder):
+    """
+    Create a copy of the main .gpkg file in a destination folder.
+
+    Input:
+    filepath (str): Path to the original .gpkg file.
+    destination_folder (str): Folder where the copy should be saved.
+
+    Output:
+    None
+    """
+    filename = os.path.basename(filepath)
+    destination_filepath = os.path.join(destination_folder, filename)
+
+    with open(filepath, 'rb') as original_file:
+        data = original_file.read()
+
+    with open(destination_filepath, 'wb') as backup_file:
+        backup_file.write(data)
+
+    print(f"Copied original file to: {destination_filepath}")
+
 def load_main_data(filepath):
     layer_name = os.path.splitext(os.path.basename(filepath))[0]
     gdf = gpd.read_file(filepath, layer=layer_name)
@@ -133,6 +156,8 @@ def merge_and_update_main(main_gdf, student_gdf, output_path):
 
     new_data = student_gdf[~student_gdf.apply(is_duplicate, axis=1)]
 
+    print(f"Number of non-duplicate records: {len(new_data)}")
+
     if not new_data.empty:
         print(f"Appending {len(new_data)} new records to main GPKG")
         new_data.to_file(output_path, layer=os.path.splitext(os.path.basename(output_path))[0], driver="GPKG", mode="a")
@@ -140,7 +165,7 @@ def merge_and_update_main(main_gdf, student_gdf, output_path):
         print("No new records to append.")
 
 
-def run_pipeline(directory, species_csv, main_file):
+def run_pipeline(directory, species_csv, main_file, directory_copy):
 
     from brain import (
         update_observer_and_species_in_gpkg,
@@ -159,6 +184,9 @@ def run_pipeline(directory, species_csv, main_file):
 
     # Step 1: Update Gpkg Files in the Directory
     update_observer_and_species_in_gpkg(directory, species_csv)
+
+    # Step 1.5: Create a copy of the main data
+    create_main_copy(main_file, directory_copy)
 
     # Step 2: Find Main File
     main = load_main_data(main_file)

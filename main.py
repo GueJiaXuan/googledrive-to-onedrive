@@ -219,6 +219,18 @@ entry4 = tk.Entry(frame4, font=("Helvetica", 14))
 entry4.grid(row=0, column=1, sticky="ew")
 frame4.columnconfigure(1, weight=1)
 
+# Fourth Frame (for saving output directory, aka selecting the main gpkg file)
+frame5 = tk.Frame(root)
+frame5.pack(fill=tk.X, pady=(10, 0), padx=20)
+
+label5 = tk.Label(frame5, text="Directory to save original copy of main.gpkg", font=("Helvetica", 14))
+label5.grid(row=0, column=0, padx=(0, 10))
+
+entry5 = tk.Entry(frame5, font=("Helvetica", 14))
+entry5.grid(row=0, column=1, sticky="ew")
+frame5.columnconfigure(1, weight=1)
+
+
 # Logic and button to select the output file (for saving output directory, aka selecting the main gpkg file)
 def select_output_file():
     from tkinter import filedialog
@@ -242,6 +254,30 @@ browse_output_button = tk.Button(
     activebackground="#d9d9d9"
 )
 browse_output_button.grid(row=0, column=2, padx=(10, 0))
+
+# Logic and button to select directory where the copied file is being saved to
+def select_backup_directory():
+    from tkinter import filedialog
+    selected_directory = filedialog.askdirectory(
+        title="Select Directory to Save Copy",
+        parent=root
+    )
+    if selected_directory:
+        entry5.delete(0, tk.END)
+        entry5.insert(0, selected_directory)
+
+browse_backup_button = tk.Button(
+    frame5,
+    text="...",
+    font=("Helvetica", 12),
+    command=select_backup_directory,
+    width=3,
+    height=1,
+    relief="raised",
+    activebackground="#d9d9d9"
+)
+browse_backup_button.grid(row=0, column=2, padx=(10, 0))
+
 
 # Logic for running the GPKG Processing Pipeline
 def run_pipeline_ui():
@@ -267,8 +303,9 @@ def run_pipeline_ui():
         gpkg_dir = entry2.get()
         species_csv_path = entry3.get()
         output_gpkg_path = entry4.get()
+        directory_copy = entry5.get()
 
-        run_pipeline(gpkg_dir, species_csv_path, output_gpkg_path)
+        run_pipeline(gpkg_dir, species_csv_path, output_gpkg_path, directory_copy)
     except Exception as e:
         print(f"Pipeline error: {e}")
     finally:
