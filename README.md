@@ -17,6 +17,7 @@ Before starting, make sure:
 
 ### 🛠️ Installation (2 Options)
 
+For Microsoft Users: Please make sure you download Python from Microsoft Store NOT directly from Python site.
 
 **Double-click `initial_run.bat`**  
    This installs the necessary packages for windows user.
