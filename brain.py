@@ -122,7 +122,7 @@ def create_main_copy(filepath, destination_folder):
 
 def load_main_data(filepath):
     target_columns = [
-        "fid", "geom", "Date", "species", "obs", "height", "radius", "photoid",
+        "geom", "Date", "species", "obs", "height", "radius", "photoid",
         "count", "year", "month", "day", "comment", "type", "english_name", "Taxa"
     ]
 
@@ -140,7 +140,7 @@ def load_main_data(filepath):
 
 def load_student_data(directory):
     target_columns = [
-        "fid", "geom", "Date", "species", "obs", "height", "radius", "photoid",
+        "geom", "Date", "species", "obs", "height", "radius", "photoid",
         "count", "year", "month", "day", "comment", "type", "english_name", "Taxa"
     ]
     # Create a mapping from lowercase to canonical column name
@@ -187,7 +187,7 @@ def load_student_data(directory):
 
 def merge_and_update_main(main_gdf, student_gdf, output_path):
     target_columns = [
-        "fid", "geom", "Date", "species", "obs", "height", "radius", "photoid",
+        "geom", "Date", "species", "obs", "height", "radius", "photoid",
         "count", "year", "month", "day", "comment", "type", "english_name", "Taxa"
     ]
     subset = ["geom", "species", "obs"]
