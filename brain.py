@@ -121,24 +121,62 @@ def create_main_copy(filepath, destination_folder):
     print(f"Copied original file to: {destination_filepath}")
 
 def load_main_data(filepath):
+    target_columns = [
+        "fid", "geom", "Date", "species", "obs", "height", "radius", "photoid",
+        "count", "year", "month", "day", "comment", "type", "english_name", "Taxa"
+    ]
+
     layer_name = os.path.splitext(os.path.basename(filepath))[0]
     gdf = gpd.read_file(filepath, layer=layer_name)
     gdf = clean_geometry_and_observer(gdf)
+
+    missing_columns = [col for col in target_columns if col not in gdf.columns]
+    if missing_columns:
+        print(f"Warning: The following required columns are missing from '{filepath}': {missing_columns}")
+
     print(f"Main file '{filepath}' loaded with {len(gdf)} records from layer '{layer_name}'")
     return gdf
 
+
 def load_student_data(directory):
+    target_columns = [
+        "fid", "geom", "Date", "species", "obs", "height", "radius", "photoid",
+        "count", "year", "month", "day", "comment", "type", "english_name", "Taxa"
+    ]
+    # Create a mapping from lowercase to canonical column name
+    col_map = {col.lower(): col for col in target_columns}
+
     gpkg_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(".gpkg")]
     combined = []
+
     for path in gpkg_files:
         try:
             layer_name = fiona.listlayers(path)[0]
             gdf = gpd.read_file(path, layer=layer_name)
             gdf = clean_geometry_and_observer(gdf)
+
+            # Normalize existing column names: lowercase + remap to correct casing
+            renamed_columns = {
+                col: col_map[col.strip().lower()]
+                for col in gdf.columns
+                if col.strip().lower() in col_map
+            }
+            gdf = gdf.rename(columns=renamed_columns)
+
+            # Add missing columns as None
+            for col in target_columns:
+                if col not in gdf.columns:
+                    gdf[col] = None
+
+            # Reorder columns
+            gdf = gdf[target_columns]
+
             combined.append(gdf)
             print(f"Student file '{path}' loaded with {len(gdf)} records from layer '{layer_name}'")
+
         except Exception as e:
             print(f"Skipping '{path}': {e}")
+
     if combined:
         combined_gdf = pd.concat(combined, ignore_index=True)
         print(f"Total combined student records: {len(combined_gdf)}")
@@ -148,7 +186,18 @@ def load_student_data(directory):
         return None
 
 def merge_and_update_main(main_gdf, student_gdf, output_path):
+    target_columns = [
+        "fid", "geom", "Date", "species", "obs", "height", "radius", "photoid",
+        "count", "year", "month", "day", "comment", "type", "english_name", "Taxa"
+    ]
     subset = ["geom", "species", "obs"]
+
+    # Safety check
+    for col in subset:
+        if col not in main_gdf.columns or col not in student_gdf.columns:
+            print(f"Error: Missing required column '{col}' in input data.")
+            return
+
     student_gdf = student_gdf.drop_duplicates()
 
     def is_duplicate(row):
@@ -160,6 +209,7 @@ def merge_and_update_main(main_gdf, student_gdf, output_path):
 
     if not new_data.empty:
         print(f"Appending {len(new_data)} new records to main GPKG")
+        new_data = new_data[target_columns]  # ensure column order
         new_data.to_file(output_path, layer=os.path.splitext(os.path.basename(output_path))[0], driver="GPKG", mode="a")
     else:
         print("No new records to append.")
