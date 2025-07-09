@@ -168,6 +168,11 @@ def load_student_data(directory):
                 if col not in gdf.columns:
                     gdf[col] = None
 
+            # Extract year, month, day from datetime64[ns] Date column and populate day, month, year columns
+            gdf["year"] = gdf["Date"].dt.year
+            gdf["month"] = gdf["Date"].dt.month
+            gdf["day"] = gdf["Date"].dt.day
+
             # Reorder columns
             gdf = gdf[target_columns]
 
@@ -179,6 +184,13 @@ def load_student_data(directory):
 
     if combined:
         combined_gdf = pd.concat(combined, ignore_index=True)
+
+        # Drop rows with missing date in date column (e.g. null)
+        before_drop = len(combined_gdf)
+        combined_gdf = combined_gdf.dropna(subset=["Date"])
+        after_drop = len(combined_gdf)
+        print(f"Dropped {before_drop - after_drop} records with missing Date.")
+
         print(f"Total combined student records: {len(combined_gdf)}")
         return combined_gdf
     else:

@@ -68,17 +68,34 @@ def make_flagged_window():
 # Title
 
 root = tk.Tk()
-root.title("Google Drive Files Download")
+root.title("Biodiversity mapping Qfield File Processing")
 
-# Create a separate frame for the logo at the top
-logo_frame = tk.Frame(root, bg="white")
-logo_frame.pack(fill=tk.BOTH, pady=10)
+# Create a container frame to center the logo row
+container = tk.Frame(root, bg="white")
+container.pack(pady=10)
 
-# Display school_logo.png inside the logo frame
-logo = PhotoImage(file="school_logo.png")
-logo_label = tk.Label(logo_frame, image=logo, bg="white")
-logo_label.pack(anchor="center")  # Centered within the logo frame
+# Inner frame to hold the images side by side, centered
+logo_frame = tk.Frame(container, bg="white")
+logo_frame.pack(anchor="center")
 
+# Load images (all PNG and already resized if needed)
+owl_image = PhotoImage(file="owl.png")
+school_logo = PhotoImage(file="school_logo.png")
+gull_image = PhotoImage(file="gull.png")  # Already resized
+
+# Create and pack labels side by side
+owl_label = tk.Label(logo_frame, image=owl_image, bg="white")
+school_label = tk.Label(logo_frame, image=school_logo, bg="white")
+gull_label = tk.Label(logo_frame, image=gull_image, bg="white")
+
+owl_label.pack(side=tk.LEFT, padx=10)
+school_label.pack(side=tk.LEFT, padx=10)
+gull_label.pack(side=tk.LEFT, padx=10)
+
+# Prevent garbage collection
+owl_label.image = owl_image
+school_label.image = school_logo
+gull_label.image = gull_image
 # Delay flags + sizing until window is realized
 root.after(0, make_flagged_window)
 
