@@ -19,13 +19,16 @@ def load_settings():
             entry3.insert(0, settings.get("species_csv", ""))
             entry4.delete(0, tk.END)
             entry4.insert(0, settings.get("output_gpkg_path", ""))
+            entry5.delete(0, tk.END)
+            entry5.insert(0, settings.get("backup_directory", ""))
 
 def save_settings():
     settings = {
         "google_folder_id": entry1.get(),
         "onedrive_path": entry2.get(),
         "species_csv": entry3.get(),
-        "output_gpkg_path": entry4.get()
+        "output_gpkg_path": entry4.get(),
+        "backup_directory": entry5.get()
     }
     with open(SETTINGS_FILE, "w") as f:
         json.dump(settings, f, indent=2)

@@ -100,8 +100,7 @@ def clean_geometry_and_observer(gdf):
 
 def create_main_copy(filepath, destination_folder):
     """
-    Create a copy of the main .gpkg file in a destination folder.
-
+    Create a dated copy of the main .gpkg file in a destination folder,
     Input:
     filepath (str): Path to the original .gpkg file.
     destination_folder (str): Folder where the copy should be saved.
@@ -109,8 +108,11 @@ def create_main_copy(filepath, destination_folder):
     Output:
     None
     """
+    datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
     filename = os.path.basename(filepath)
-    destination_filepath = os.path.join(destination_folder, filename)
+    name, ext = os.path.splitext(filename)
+    dated_filename = f"{name}_({datetime_str}){ext}"
+    destination_filepath = os.path.join(destination_folder, dated_filename)
 
     with open(filepath, 'rb') as original_file:
         data = original_file.read()
