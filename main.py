@@ -1,7 +1,6 @@
 import tkinter as tk
 from tkinter import PhotoImage  # Required for displaying images
 from GoogleDriveAuthDownload import auth, delete_all_files_in_folder
-from brain import run_pipeline
 import json
 import os
 SETTINGS_FILE = "settings.json"
@@ -325,9 +324,14 @@ def run_pipeline_ui():
         output_gpkg_path = entry4.get()
         directory_copy = entry5.get()
 
-        run_pipeline(gpkg_dir, species_csv_path, output_gpkg_path, directory_copy)
+        # Use error handler for detailed diagnostics
+        from error_handler import safe_run_pipeline
+        safe_run_pipeline(gpkg_dir, species_csv_path, output_gpkg_path, directory_copy)
     except Exception as e:
         print(f"Pipeline error: {e}")
+        print(f"\n✓ Error snapshot created with all files")
+        print(f"✓ Look for folder: error_snapshot_YYYYMMDD_HHMMSS")
+        print(f"   ZIP and share this entire folder for debugging")
     finally:
         sys.stdout = old_stdout
 

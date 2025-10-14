@@ -13,3 +13,16 @@ pyproject.toml
 brain_old.py
 # Virtual environments
 .venv
+
+# Error handling files
+error_log.txt
+error_snapshot_*/
+
+# Backup files
+*_(20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]-[0-9][0-9]).gpkg
+
+# Test files and data
+test.py
+test/
+test_data/
+fourth_test/

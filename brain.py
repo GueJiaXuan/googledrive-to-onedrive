@@ -21,6 +21,16 @@ def update_observer_and_species_in_gpkg(directory, species_csv):
 
     # Load species mapping CSV
     species_df = pd.read_csv(species_csv, encoding='ISO-8859-1')
+
+    # Clean the species column to remove any trailing/leading whitespace
+    species_df['species'] = species_df['species'].str.strip()
+
+    # Check for and handle duplicates
+    if species_df['species'].duplicated().any():
+        print(f"Warning: Found {species_df['species'].duplicated().sum()} duplicate species in {species_csv}")
+        print("Keeping first occurrence of each duplicate species...")
+        species_df = species_df.drop_duplicates(subset=['species'], keep='first')
+
     species_mapping = species_df.set_index('species')[['type', 'english_name']].to_dict(orient='index')
 
     # Find Excel file
@@ -74,6 +84,15 @@ def update_observer_and_species_in_gpkg(directory, species_csv):
 
         # Update type and english_name based on species
         if 'species' in gdf.columns:
+            # Check for species not in mapping
+            unmapped_species = set(gdf['species'].dropna()) - set(species_mapping.keys())
+            if unmapped_species:
+                print(f"Warning: {len(unmapped_species)} species in {file_name} not found in species.csv:")
+                for species in list(unmapped_species)[:5]:  # Show first 5
+                    print(f"  - {species}")
+                if len(unmapped_species) > 5:
+                    print(f"  ... and {len(unmapped_species) - 5} more")
+
             gdf['type'] = gdf['species'].map(lambda sp: species_mapping.get(sp, {}).get('type', gdf.get('type')))
             gdf['english_name'] = gdf['species'].map(lambda sp: species_mapping.get(sp, {}).get('english_name', gdf.get('english_name')))
             print(f"Updated 'type' and 'english_name' in {file_name}")
