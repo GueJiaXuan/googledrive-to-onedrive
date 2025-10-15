@@ -104,6 +104,32 @@ def update_observer_and_species_in_gpkg(directory, species_csv):
         gdf.to_file(file_path, driver="GPKG", layer=layer_name)
         print(f"Saved updates to {file_name}")
 
+def calculate_sampling_year(date):
+    """
+    Calculate school year (sampling year) in format YYYY-YY based on non-calendar year (May 1 - April 30)
+
+    Rules:
+    - If month is 5-12: school_year = "{year}-{last_two_of_year+1}"  (e.g., 14/08/2025 -> "2025-26")
+    - If month is 1-4: school_year = "{year-1}-{last_two_of_year}"  (e.g., 30/04/2025 -> "2024-25")
+
+    Returns the school year string (e.g., "2025-26")
+    """
+    if pd.isna(date):
+        return None
+
+    year = date.year
+    month = date.month
+
+    if month >= 5:  # May to December
+        # Format: year-next_year (e.g., 2025-26)
+        next_year_short = str(year + 1)[-2:]
+        return f"{year}-{next_year_short}"
+    else:  # January to April
+        # Format: previous_year-year (e.g., 2024-25)
+        year_short = str(year)[-2:]
+        return f"{year - 1}-{year_short}"
+
+
 def clean_geometry_and_observer(gdf):
     if gdf.crs and gdf.crs.to_string() != "EPSG:4326":
         gdf = gdf.to_crs("EPSG:4326")
@@ -144,7 +170,7 @@ def create_main_copy(filepath, destination_folder):
 def load_main_data(filepath):
     target_columns = [
         "geom", "Date", "species", "obs", "height", "radius", "photoid",
-        "count", "year", "month", "day", "comment", "type", "english_name", "Taxa"
+        "count", "school_year", "calendar_year", "month", "day", "comment", "type", "english_name", "Taxa"
     ]
 
     layer_name = os.path.splitext(os.path.basename(filepath))[0]
@@ -162,7 +188,7 @@ def load_main_data(filepath):
 def load_student_data(directory):
     target_columns = [
         "geom", "Date", "species", "obs", "height", "radius", "photoid",
-        "count", "year", "month", "day", "comment", "type", "english_name", "Taxa"
+        "count", "school_year", "calendar_year", "month", "day", "comment", "type", "english_name", "Taxa"
     ]
     # Create a mapping from lowercase to canonical column name
     col_map = {col.lower(): col for col in target_columns}
@@ -189,10 +215,13 @@ def load_student_data(directory):
                 if col not in gdf.columns:
                     gdf[col] = None
 
-            # Extract year, month, day from datetime64[ns] Date column and populate day, month, year columns
-            gdf["year"] = gdf["Date"].dt.year
+            # Extract calendar_year (calendar year), month, day from datetime64[ns] Date column
+            gdf["calendar_year"] = gdf["Date"].dt.year
             gdf["month"] = gdf["Date"].dt.month
             gdf["day"] = gdf["Date"].dt.day
+
+            # Calculate school_year (May 1 - April 30 format: YYYY-YY)
+            gdf["school_year"] = gdf["Date"].apply(calculate_sampling_year)
 
             # Reorder columns
             gdf = gdf[target_columns]
@@ -221,7 +250,7 @@ def load_student_data(directory):
 def merge_and_update_main(main_gdf, student_gdf, output_path):
     target_columns = [
         "geom", "Date", "species", "obs", "height", "radius", "photoid",
-        "count", "year", "month", "day", "comment", "type", "english_name", "Taxa"
+        "count", "school_year", "calendar_year", "month", "day", "comment", "type", "english_name", "Taxa"
     ]
     subset = ["geom", "species", "obs"]
 
