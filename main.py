@@ -1,11 +1,28 @@
 import tkinter as tk
-from tkinter import PhotoImage  # Required for displaying images
+from tkinter import ttk, PhotoImage, filedialog
 from GoogleDriveAuthDownload import auth, delete_all_files_in_folder
 import json
 import os
+
 SETTINGS_FILE = "settings.json"
 
-# Define entry widgets with the settings.json file
+# Color scheme - Dark Theme
+COLORS = {
+    'primary': '#4CAF50',      # Green
+    'primary_hover': '#66BB6A', # Lighter green
+    'secondary': '#42A5F5',     # Blue
+    'secondary_hover': '#64B5F6', # Lighter blue
+    'danger': '#EF5350',        # Red
+    'danger_hover': '#F44336',  # Brighter red
+    'bg': '#1E1E1E',            # Dark background
+    'card_bg': '#2D2D2D',       # Dark card background
+    'text': '#E0E0E0',          # Light text
+    'text_secondary': '#B0B0B0', # Secondary light text
+    'border': '#404040',        # Dark border
+    'input_bg': '#383838',      # Input field background
+    'input_text': '#FFFFFF'     # Input text color
+}
+
 def load_settings():
     if os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, "r") as f:
@@ -32,299 +49,307 @@ def save_settings():
     with open(SETTINGS_FILE, "w") as f:
         json.dump(settings, f, indent=2)
 
-def make_flagged_window():
-    """
-    Sets up a window with specific configuration such as keeping it on top,
-    disabling resizing, and centering it to occupy 40% of the screen dimensions
-    both horizontally and vertically.
+def create_styled_button(parent, text, command, color='primary', width=None):
+    """Create a styled button with hover effects"""
+    btn_frame = tk.Frame(parent, bg=COLORS[color], bd=0, relief=tk.FLAT)
 
-    By computing 40% screen dimensions, this function ensures that the created
-    window is neither too large nor too small. The positioning centers the
-    window on the screen for better visibility.
-    """
+    btn = tk.Button(
+        btn_frame,
+        text=text,
+        command=command,
+        font=("Segoe UI", 13, "bold"),
+        bg=COLORS[color],
+        fg="#000000",
+        bd=0,
+        padx=25,
+        pady=12,
+        cursor="hand2",
+        activebackground=COLORS[f'{color}_hover'],
+        activeforeground="#000000"
+    )
 
-    # 2) Flag: disable resizing, so geometry is respected
-    # root.resizable(False, False)
-    #root.attributes("-topmost", 1)  # Set window as topmost initially
-    root.lift()
-    root.focus_force()  # Also give it keyboard focus
+    if width:
+        btn.config(width=width)
 
-    # This is important - update the window to ensure it appears
-    # before continuing with other code
-    root.update()
+    btn.pack(padx=2, pady=2)
 
+    # Hover effects
+    def on_enter(e):
+        btn.config(bg=COLORS[f'{color}_hover'])
 
-    # 3) Compute 40% dimensions
-    screen_w = root.winfo_screenwidth()
-    screen_h = root.winfo_screenheight()
-    win_w = int(screen_w * 0.6)
-    win_h = int(screen_h * 1)
+    def on_leave(e):
+        btn.config(bg=COLORS[color])
 
-    # 4) Center offsets
-    x = (screen_w - win_w) // 2
-    y = (screen_h - win_h) // 2
+    btn.bind("<Enter>", on_enter)
+    btn.bind("<Leave>", on_leave)
 
-    # 5) Apply size & position
-    root.geometry(f'{win_w}x{win_h}+{x}+{y}')
+    return btn_frame
 
-# Title
+def create_input_row(parent, label_text, browse_command=None, file_type=None):
+    """Create a consistent input row with label, entry, and optional browse button"""
+    frame = tk.Frame(parent, bg=COLORS['card_bg'])
+    frame.pack(fill=tk.X, pady=8, padx=20)
 
+    # Label
+    label = tk.Label(
+        frame,
+        text=label_text,
+        font=("Segoe UI", 10),
+        bg=COLORS['card_bg'],
+        fg=COLORS['text'],
+        anchor="w",
+        width=20  # Fixed width for consistent alignment
+    )
+    label.pack(side=tk.LEFT, padx=(0, 15))
+
+    # Entry
+    entry = tk.Entry(
+        frame,
+        font=("Segoe UI", 10),
+        bg=COLORS['input_bg'],
+        fg=COLORS['input_text'],
+        relief=tk.SOLID,
+        bd=1,
+        highlightthickness=1,
+        highlightcolor=COLORS['primary'],
+        highlightbackground=COLORS['border'],
+        insertbackground=COLORS['input_text']  # Cursor color
+    )
+    entry.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Browse button if needed
+    if browse_command:
+        browse_btn = tk.Button(
+            frame,
+            text="Browse...",
+            command=browse_command,
+            font=("Segoe UI", 9),
+            bg=COLORS['card_bg'],
+            fg=COLORS['text'],
+            bd=1,
+            relief=tk.SOLID,
+            padx=15,
+            pady=5,
+            cursor="hand2",
+            activebackground=COLORS['border'],
+            activeforeground=COLORS['text']
+        )
+        browse_btn.pack(side=tk.LEFT, padx=(10, 0))
+
+        # Hover effect for browse button
+        def on_enter(e):
+            browse_btn.config(bg=COLORS['border'])
+
+        def on_leave(e):
+            browse_btn.config(bg=COLORS['card_bg'])
+
+        browse_btn.bind("<Enter>", on_enter)
+        browse_btn.bind("<Leave>", on_leave)
+
+    return entry
+
+def create_section_header(parent, text, icon=None):
+    """Create a section header"""
+    header_frame = tk.Frame(parent, bg=COLORS['bg'])
+    header_frame.pack(fill=tk.X, pady=(20, 10), padx=20)
+
+    # Separator line on left
+    left_line = tk.Frame(header_frame, bg=COLORS['primary'], height=2)
+    left_line.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=10)
+
+    # Header text
+    label = tk.Label(
+        header_frame,
+        text=f"  {text}  ",
+        font=("Segoe UI", 12, "bold"),
+        bg=COLORS['bg'],
+        fg=COLORS['primary']
+    )
+    label.pack(side=tk.LEFT)
+
+    # Separator line on right
+    right_line = tk.Frame(header_frame, bg=COLORS['primary'], height=2)
+    right_line.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=10)
+
+# Initialize main window
 root = tk.Tk()
-root.title("Biodiversity mapping Qfield File Processing")
+root.title("Biodiversity Mapping - QField File Processing")
+root.configure(bg=COLORS['bg'])
 
-# Create a container frame to center the logo row
-container = tk.Frame(root, bg="white")
-container.pack(pady=10)
+# Configure window size
+screen_w = root.winfo_screenwidth()
+screen_h = root.winfo_screenheight()
+win_w = min(int(screen_w * 0.7), 1000)  # Max 1000px wide
+win_h = min(int(screen_h * 0.9), 900)   # Max 900px tall
+x = (screen_w - win_w) // 2
+y = (screen_h - win_h) // 2
+root.geometry(f'{win_w}x{win_h}+{x}+{y}')
+root.minsize(800, 600)
 
-# Inner frame to hold the images side by side, centered
-logo_frame = tk.Frame(container, bg="white")
-logo_frame.pack(anchor="center")
+# Make root window resizable
+root.rowconfigure(0, weight=1)
+root.columnconfigure(0, weight=1)
 
-# Load images (all PNG and already resized if needed)
-owl_image = PhotoImage(file="owl.png")
-school_logo = PhotoImage(file="school_logo.png")
-gull_image = PhotoImage(file="gull.png")  # Already resized
+# Create scrollable main frame
+main_canvas = tk.Canvas(root, bg=COLORS['bg'], highlightthickness=0)
+scrollbar = tk.Scrollbar(root, orient="vertical", command=main_canvas.yview, bg=COLORS['card_bg'], troughcolor=COLORS['bg'])
+scrollable_frame = tk.Frame(main_canvas, bg=COLORS['bg'])
 
-# Create and pack labels side by side
-owl_label = tk.Label(logo_frame, image=owl_image, bg="white")
-school_label = tk.Label(logo_frame, image=school_logo, bg="white")
-gull_label = tk.Label(logo_frame, image=gull_image, bg="white")
-
-owl_label.pack(side=tk.LEFT, padx=10)
-school_label.pack(side=tk.LEFT, padx=10)
-gull_label.pack(side=tk.LEFT, padx=10)
-
-# Prevent garbage collection
-owl_label.image = owl_image
-school_label.image = school_logo
-gull_label.image = gull_image
-# Delay flags + sizing until window is realized
-root.after(0, make_flagged_window)
-
-# First Frame (Google Drive Folder ID)
-frame1 = tk.Frame(root)
-frame1.pack(fill=tk.X, pady=(10, 0), padx=20)
-
-# Label (Google Drive Folder ID)
-label1 = tk.Label(frame1, text="Google Drive Folder ID:", font=("Helvetica", 14))
-label1.grid(row=0, column=0, padx=(0, 10))
-entry1 = tk.Entry(frame1, font=("Helvetica", 14))
-entry1.grid(row=0, column=1, sticky="ew")
-frame1.columnconfigure(1, weight=1)
-
-# Second Frame (Downloaded Folder Path. e.g. OneDrive folder path)
-frame2 = tk.Frame(root)
-frame2.pack(fill=tk.X, pady=(10, 0), padx=20)
-
-# Label (Downloaded Folder Path. e.g. OneDrive folder path)
-label2 = tk.Label(frame2, text="Downloaded Folder Path:", font=("Helvetica", 14))
-label2.grid(row=0, column=0, padx=(0, 10))
-entry2 = tk.Entry(frame2, font=("Helvetica", 14))
-entry2.grid(row=0, column=1, sticky="ew")
-frame2.columnconfigure(1, weight=1)
-
-# Extra Logic and button for browsing (Downloaded Folder Path. e.g. OneDrive folder path)
-def select_directory():
-    """
-    Basically chooses a directory to download to.
-    """
-    from tkinter import filedialog
-    selected_dir = filedialog.askdirectory(title="Select Directory", parent=root)
-    if selected_dir:
-        entry2.delete(0, tk.END)
-        entry2.insert(0, selected_dir)
-
-
-browse_button = tk.Button(
-    frame2,
-    text="...",
-    font=("Helvetica", 12),
-    command=select_directory,
-    width=3,
-    height=1,
-    relief="raised",
-    activebackground="#d9d9d9"
+# Configure scrollable frame to resize with canvas
+scrollable_frame.bind(
+    "<Configure>",
+    lambda e: main_canvas.configure(scrollregion=main_canvas.bbox("all"))
 )
-browse_button.grid(row=0, column=2, padx=(10, 0))
 
-# Logic and button for First and Second Frame (Google Drive Folder ID to Downloaded Folder Path. e.g. OneDrive folder path)
+canvas_window = main_canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+
+# Make the scrollable frame width match canvas width
+def configure_scroll_region(event):
+    main_canvas.configure(scrollregion=main_canvas.bbox("all"))
+    # Update the width of the scrollable_frame to match canvas width
+    canvas_width = event.width
+    main_canvas.itemconfig(canvas_window, width=canvas_width)
+
+main_canvas.bind("<Configure>", configure_scroll_region)
+main_canvas.configure(yscrollcommand=scrollbar.set)
+
+# Mouse wheel scrolling
+def on_mousewheel(event):
+    main_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+
+main_canvas.bind_all("<MouseWheel>", on_mousewheel)
+
+# Header with logos
+header_frame = tk.Frame(scrollable_frame, bg=COLORS['card_bg'], relief=tk.FLAT, bd=1)
+header_frame.pack(fill=tk.X, pady=(0, 10))
+
+logo_container = tk.Frame(header_frame, bg=COLORS['card_bg'])
+logo_container.pack(pady=20)
+
+# Load images if they exist
+try:
+    # Load images and scale them down using subsample to ensure they all fit
+    scale_factor = 2  # Subsample by 2 = half the original size
+
+    owl_original = PhotoImage(file="owl.png")
+    owl_image = owl_original.subsample(scale_factor, scale_factor)
+
+    school_original = PhotoImage(file="school_logo.png")
+    school_logo = school_original.subsample(scale_factor, scale_factor)
+
+    gull_original = PhotoImage(file="gull.png")
+    gull_image = gull_original.subsample(scale_factor, scale_factor)
+
+    owl_label = tk.Label(logo_container, image=owl_image, bg=COLORS['card_bg'])
+    school_label = tk.Label(logo_container, image=school_logo, bg=COLORS['card_bg'])
+    gull_label = tk.Label(logo_container, image=gull_image, bg=COLORS['card_bg'])
+
+    owl_label.pack(side=tk.LEFT, padx=8)
+    school_label.pack(side=tk.LEFT, padx=8)
+    gull_label.pack(side=tk.LEFT, padx=8)
+
+    # Prevent garbage collection - need to keep both original and subsampled
+    owl_label.image = owl_image
+    owl_label.original = owl_original
+    school_label.image = school_logo
+    school_label.original = school_original
+    gull_label.image = gull_image
+    gull_label.original = gull_original
+except:
+    # If images don't load, show a title instead
+    title_label = tk.Label(
+        logo_container,
+        text="Biodiversity Mapping System",
+        font=("Segoe UI", 24, "bold"),
+        bg=COLORS['card_bg'],
+        fg=COLORS['primary']
+    )
+    title_label.pack(pady=20)
+
+# === SECTION 1: Google Drive Download ===
+create_section_header(scrollable_frame, "STEP 1: Download Files from Google Drive")
+
+card1 = tk.Frame(scrollable_frame, bg=COLORS['card_bg'], relief=tk.FLAT, bd=1)
+card1.pack(fill=tk.X, padx=20, pady=10)
+
+entry1 = create_input_row(card1, "Google Drive Folder ID:", None)
+entry2 = create_input_row(
+    card1,
+    "Download Destination:",
+    lambda: (entry2.delete(0, tk.END), entry2.insert(0, filedialog.askdirectory(title="Select Download Directory", parent=root)))
+)
+
+# Download button
 def submit():
-    """
-    Logic that takes the first frame, which is the Google Drive folder ID,
-    and downloads the files in the downloaded folder path
-    :return: NIL
-    """
     import sys
-
     class TextRedirector:
-        """Redirects stdout to a text widget for live updates."""
-
         def __init__(self, text_widget):
             self.text_widget = text_widget
-
         def write(self, content):
             self.text_widget.configure(state=tk.NORMAL)
             self.text_widget.insert(tk.END, content)
             self.text_widget.configure(state=tk.DISABLED)
             self.text_widget.see(tk.END)
-
-        def flush(self):
-            pass  # Required method for file-like objects
-
-    # Redirect stdout to the text widget
-    old_stdout = sys.stdout
-    sys.stdout = TextRedirector(output_text)
-
-    try:
-        auth(entry1.get(), entry2.get())  # Call auth with entered values
-    finally:
-        sys.stdout = old_stdout  # Restore original stdout
-
-button = tk.Button(
-    root,
-    text="Download Files",
-    font=("Helvetica", 12),  # Match the font size to "Browse"
-    command=submit,
-    height=2,
-    relief="raised",
-    activebackground="#d9d9d9"
-)
-button.pack(pady=20)
-
-# Third Frame (for species.csv folder)
-frame3 = tk.Frame(root)
-frame3.pack(fill=tk.X, pady=(10, 0), padx=20)
-
-# Third Label (for species.csv file)
-label3 = tk.Label(frame3, text="Select species.csv file:", font=("Helvetica", 14))
-label3.grid(row=0, column=0, padx=(0, 10))
-entry3 = tk.Entry(frame3, font=("Helvetica", 14))
-entry3.grid(row=0, column=1, sticky="ew")
-frame3.columnconfigure(1, weight=1)
-
-# Logic and button for Third Label (species.csv file)
-def select_species_csv_file():
-    from tkinter import filedialog
-    selected_file = filedialog.askopenfilename(
-        title="Select species.csv file",
-        parent=root,
-        filetypes=[("CSV Files", "*.csv")]
-    )
-    if selected_file:
-        entry3.delete(0, tk.END)
-        entry3.insert(0, selected_file)
-
-browse_species_button = tk.Button(
-    frame3,
-    text="...",
-    font=("Helvetica", 12),
-    command=select_species_csv_file,
-    width=3,
-    height=1,
-    relief="raised",
-    activebackground="#d9d9d9"
-)
-browse_species_button.grid(row=0, column=2, padx=(10, 0))
-
-
-# Fourth Frame (for saving output directory, aka selecting the main gpkg file)
-frame4 = tk.Frame(root)
-frame4.pack(fill=tk.X, pady=(10, 0), padx=20)
-
-label4 = tk.Label(frame4, text="Select Main.Gpkg File", font=("Helvetica", 14))
-label4.grid(row=0, column=0, padx=(0, 10))
-
-entry4 = tk.Entry(frame4, font=("Helvetica", 14))
-entry4.grid(row=0, column=1, sticky="ew")
-frame4.columnconfigure(1, weight=1)
-
-# Fourth Frame (for saving output directory, aka selecting the main gpkg file)
-frame5 = tk.Frame(root)
-frame5.pack(fill=tk.X, pady=(10, 0), padx=20)
-
-label5 = tk.Label(frame5, text="Directory to save original copy of main.gpkg", font=("Helvetica", 14))
-label5.grid(row=0, column=0, padx=(0, 10))
-
-entry5 = tk.Entry(frame5, font=("Helvetica", 14))
-entry5.grid(row=0, column=1, sticky="ew")
-frame5.columnconfigure(1, weight=1)
-
-
-# Logic and button to select the output file (for saving output directory, aka selecting the main gpkg file)
-def select_output_file():
-    from tkinter import filedialog
-    selected_file = filedialog.askopenfilename(
-        title="Select .gpkg File",
-        parent=root,
-        filetypes=[("GeoPackage", "*.gpkg")]
-    )
-    if selected_file:
-        entry4.delete(0, tk.END)
-        entry4.insert(0, selected_file)
-
-browse_output_button = tk.Button(
-    frame4,
-    text="...",
-    font=("Helvetica", 12),
-    command=select_output_file,
-    width=3,
-    height=1,
-    relief="raised",
-    activebackground="#d9d9d9"
-)
-browse_output_button.grid(row=0, column=2, padx=(10, 0))
-
-# Logic and button to select directory where the copied file is being saved to
-def select_backup_directory():
-    from tkinter import filedialog
-    selected_directory = filedialog.askdirectory(
-        title="Select Directory to Save Copy",
-        parent=root
-    )
-    if selected_directory:
-        entry5.delete(0, tk.END)
-        entry5.insert(0, selected_directory)
-
-browse_backup_button = tk.Button(
-    frame5,
-    text="...",
-    font=("Helvetica", 12),
-    command=select_backup_directory,
-    width=3,
-    height=1,
-    relief="raised",
-    activebackground="#d9d9d9"
-)
-browse_backup_button.grid(row=0, column=2, padx=(10, 0))
-
-
-# Logic for running the GPKG Processing Pipeline
-def run_pipeline_ui():
-    import sys
-
-    class TextRedirector:
-        def __init__(self, text_widget):
-            self.text_widget = text_widget
-
-        def write(self, content):
-            self.text_widget.configure(state=tk.NORMAL)
-            self.text_widget.insert(tk.END, content)
-            self.text_widget.configure(state=tk.DISABLED)
-            self.text_widget.see(tk.END)
-
         def flush(self):
             pass
 
     old_stdout = sys.stdout
     sys.stdout = TextRedirector(output_text)
+    try:
+        auth(entry1.get(), entry2.get())
+    finally:
+        sys.stdout = old_stdout
 
+btn_download_frame = tk.Frame(card1, bg=COLORS['card_bg'])
+btn_download_frame.pack(pady=15)
+create_styled_button(btn_download_frame, "📥 Download Files from Google Drive", submit, 'secondary', 30).pack()
+
+# === SECTION 2: GPKG Processing ===
+create_section_header(scrollable_frame, "STEP 2: Process GPKG Files")
+
+card2 = tk.Frame(scrollable_frame, bg=COLORS['card_bg'], relief=tk.FLAT, bd=1)
+card2.pack(fill=tk.X, padx=20, pady=10)
+
+entry3 = create_input_row(
+    card2,
+    "Species CSV File:",
+    lambda: (entry3.delete(0, tk.END), entry3.insert(0, filedialog.askopenfilename(title="Select Species CSV", parent=root, filetypes=[("CSV Files", "*.csv")])))
+)
+
+entry4 = create_input_row(
+    card2,
+    "Main GPKG File:",
+    lambda: (entry4.delete(0, tk.END), entry4.insert(0, filedialog.askopenfilename(title="Select Main GPKG", parent=root, filetypes=[("GeoPackage", "*.gpkg")])))
+)
+
+entry5 = create_input_row(
+    card2,
+    "Backup Directory:",
+    lambda: (entry5.delete(0, tk.END), entry5.insert(0, filedialog.askdirectory(title="Select Backup Directory", parent=root)))
+)
+
+# Pipeline button
+def run_pipeline_ui():
+    import sys
+    class TextRedirector:
+        def __init__(self, text_widget):
+            self.text_widget = text_widget
+        def write(self, content):
+            self.text_widget.configure(state=tk.NORMAL)
+            self.text_widget.insert(tk.END, content)
+            self.text_widget.configure(state=tk.DISABLED)
+            self.text_widget.see(tk.END)
+        def flush(self):
+            pass
+
+    old_stdout = sys.stdout
+    sys.stdout = TextRedirector(output_text)
     try:
         gpkg_dir = entry2.get()
         species_csv_path = entry3.get()
         output_gpkg_path = entry4.get()
         directory_copy = entry5.get()
 
-        # Use error handler for detailed diagnostics
         from error_handler import safe_run_pipeline
         safe_run_pipeline(gpkg_dir, species_csv_path, output_gpkg_path, directory_copy)
     except Exception as e:
@@ -334,76 +359,89 @@ def run_pipeline_ui():
         print(f"   ZIP and share this entire folder for debugging")
     finally:
         sys.stdout = old_stdout
-
-    # save current entry inputs to json file
     save_settings()
 
-pipeline_button = tk.Button(
-    root,
-    text="Run GPKG Processing Pipeline",
-    font=("Helvetica", 12),
-    command=run_pipeline_ui,
-    height=2,
-    relief="raised",
-    activebackground="#d9d9d9"
-)
-pipeline_button.pack(pady=10)
+btn_pipeline_frame = tk.Frame(card2, bg=COLORS['card_bg'])
+btn_pipeline_frame.pack(pady=15)
+create_styled_button(btn_pipeline_frame, "⚙️ Run GPKG Processing Pipeline", run_pipeline_ui, 'primary', 30).pack()
 
-# Logic and Button for deleting google drive files (specifically gpkg files in OneDrive)
+# === SECTION 3: Cleanup ===
+create_section_header(scrollable_frame, "STEP 3: Cleanup")
+
+card3 = tk.Frame(scrollable_frame, bg=COLORS['card_bg'], relief=tk.FLAT, bd=1)
+card3.pack(fill=tk.X, padx=20, pady=10)
+
+info_label = tk.Label(
+    card3,
+    text="⚠️  Warning: This will permanently delete all files from the Google Drive folder",
+    font=("Segoe UI", 9, "italic"),
+    bg=COLORS['card_bg'],
+    fg=COLORS['danger']
+)
+info_label.pack(pady=(15, 10))
+
+# Delete button
 def delete_files():
     import sys
-
     class TextRedirector:
-        """Redirects stdout to a text widget for live updates."""
-
         def __init__(self, text_widget):
             self.text_widget = text_widget
-
         def write(self, content):
             self.text_widget.configure(state=tk.NORMAL)
             self.text_widget.insert(tk.END, content)
             self.text_widget.configure(state=tk.DISABLED)
             self.text_widget.see(tk.END)
-
         def flush(self):
-            pass  # Required method for file-like objects
+            pass
 
-    # Redirect stdout to the text widget
     old_stdout = sys.stdout
     sys.stdout = TextRedirector(output_text)
-
     try:
-        print(f"Attempting to delete all files in folder in the Google Folder")
-        delete_all_files_in_folder(entry1.get())  # Call delete_all_files_in_folder with entered folder ID
-        #print("All files deleted successfully.")
+        print(f"Attempting to delete all files in Google Drive folder...")
+        delete_all_files_in_folder(entry1.get())
     except Exception as e:
         print(f"An error occurred while deleting files: {e}")
     finally:
-        sys.stdout = old_stdout  # Restore original stdout
+        sys.stdout = old_stdout
 
+btn_delete_frame = tk.Frame(card3, bg=COLORS['card_bg'])
+btn_delete_frame.pack(pady=15)
+create_styled_button(btn_delete_frame, "🗑️ Delete All Files from Google Drive", delete_files, 'danger', 30).pack()
 
-delete_button = tk.Button(
-    root,
-    text="Delete All Files in the Google Folder",
-    font=("Helvetica", 12),
-    command=delete_files,
-    width=30,
-    height=2,
-    relief="raised",
-    activebackground="#d9d9d9"
+# === OUTPUT LOG ===
+create_section_header(scrollable_frame, "Output Log")
+
+# Container frame for output that will expand
+output_container = tk.Frame(scrollable_frame, bg=COLORS['bg'])
+output_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=(10, 20))
+
+output_frame = tk.Frame(output_container, bg=COLORS['card_bg'], relief=tk.FLAT, bd=1)
+output_frame.pack(fill=tk.BOTH, expand=True)
+
+# Scrollbar for output
+output_scroll = tk.Scrollbar(output_frame, bg=COLORS['card_bg'], troughcolor=COLORS['bg'])
+output_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+
+output_text = tk.Text(
+    output_frame,
+    font=("Consolas", 10),
+    wrap=tk.WORD,
+    bg="#0D0D0D",
+    fg="#00FF00",
+    relief=tk.FLAT,
+    padx=10,
+    pady=10,
+    yscrollcommand=output_scroll.set,
+    insertbackground="#00FF00"  # Cursor color
 )
-delete_button.pack(pady=10)
-
-# Add a text widget to display the logs/output from the auth function
-output_text = tk.Text(root, font=("Helvetica", 12), wrap=tk.WORD, height=10)
+output_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 output_text.configure(state=tk.DISABLED)
-output_text.pack(fill=tk.BOTH, expand=True, pady=10, padx=20)
+output_scroll.config(command=output_text.yview)
 
-# Fill in entry widget inputs
+# Grid canvas and scrollbar for better resizing
+main_canvas.grid(row=0, column=0, sticky="nsew")
+scrollbar.grid(row=0, column=1, sticky="ns")
+
+# Load settings and start
 load_settings()
-
-# Run the program
 root.mainloop()
-
-
-
