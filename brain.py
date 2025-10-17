@@ -177,9 +177,28 @@ def load_main_data(filepath):
     gdf = gpd.read_file(filepath, layer=layer_name)
     gdf = clean_geometry_and_observer(gdf)
 
-    missing_columns = [col for col in target_columns if col not in gdf.columns]
-    if missing_columns:
-        print(f"Warning: The following required columns are missing from '{filepath}': {missing_columns}")
+    # Drop old column names if they exist (year1 -> calendar_year transition)
+    old_columns_to_drop = ['year1']
+    for old_col in old_columns_to_drop:
+        if old_col in gdf.columns:
+            gdf = gdf.drop(columns=[old_col])
+            print(f"Dropped old column '{old_col}' from main file")
+
+    # Add missing columns as None
+    for col in target_columns:
+        if col not in gdf.columns:
+            gdf[col] = None
+
+    # Recalculate temporal columns from Date column if Date exists
+    if "Date" in gdf.columns and not gdf["Date"].isna().all():
+        gdf["calendar_year"] = gdf["Date"].dt.year
+        gdf["month"] = gdf["Date"].dt.month
+        gdf["day"] = gdf["Date"].dt.day
+        gdf["school_year"] = gdf["Date"].apply(calculate_sampling_year)
+        print(f"Recalculated temporal columns (school_year, calendar_year, month, day) from Date")
+
+    # Reorder columns to match target structure
+    gdf = gdf[target_columns]
 
     print(f"Main file '{filepath}' loaded with {len(gdf)} records from layer '{layer_name}'")
     return gdf
@@ -210,6 +229,12 @@ def load_student_data(directory):
             }
             gdf = gdf.rename(columns=renamed_columns)
 
+            # Drop old column names if they exist (year1 -> calendar_year transition)
+            old_columns_to_drop = ['year1']
+            for old_col in old_columns_to_drop:
+                if old_col in gdf.columns:
+                    gdf = gdf.drop(columns=[old_col])
+
             # Add missing columns as None
             for col in target_columns:
                 if col not in gdf.columns:
@@ -223,7 +248,7 @@ def load_student_data(directory):
             # Calculate school_year (May 1 - April 30 format: YYYY-YY)
             gdf["school_year"] = gdf["Date"].apply(calculate_sampling_year)
 
-            # Reorder columns
+            # Reorder columns to ensure consistency
             gdf = gdf[target_columns]
 
             combined.append(gdf)
@@ -270,11 +295,26 @@ def merge_and_update_main(main_gdf, student_gdf, output_path):
     print(f"Number of non-duplicate records: {len(new_data)}")
 
     if not new_data.empty:
-        print(f"Appending {len(new_data)} new records to main GPKG")
-        new_data = new_data[target_columns]  # ensure column order
-        new_data.to_file(output_path, layer=os.path.splitext(os.path.basename(output_path))[0], driver="GPKG", mode="a")
+        print(f"Merging {len(new_data)} new records with {len(main_gdf)} existing records")
+
+        # Combine main data with new data
+        combined_gdf = pd.concat([main_gdf, new_data], ignore_index=True)
+
+        # Ensure column order
+        combined_gdf = combined_gdf[target_columns]
+
+        # Write the entire combined dataset (overwrites the file with correct structure)
+        layer_name = os.path.splitext(os.path.basename(output_path))[0]
+        combined_gdf.to_file(output_path, layer=layer_name, driver="GPKG")
+        print(f"✓ Updated main GPKG with {len(combined_gdf)} total records")
     else:
         print("No new records to append.")
+
+        # Still rewrite the main file with correct column structure even if no new data
+        main_gdf = main_gdf[target_columns]
+        layer_name = os.path.splitext(os.path.basename(output_path))[0]
+        main_gdf.to_file(output_path, layer=layer_name, driver="GPKG")
+        print(f"✓ Main GPKG structure updated with {len(main_gdf)} records")
 
 
 def run_pipeline(directory, species_csv, main_file, directory_copy):

@@ -231,30 +231,30 @@ try:
     # Load images and scale them down using subsample to ensure they all fit
     scale_factor = 2  # Subsample by 2 = half the original size
 
-    owl_original = PhotoImage(file="owl.png")
-    owl_image = owl_original.subsample(scale_factor, scale_factor)
+    moth_original = PhotoImage(file="moth.png")
+    moth_image = moth_original.subsample(scale_factor, scale_factor)
 
     school_original = PhotoImage(file="school_logo.png")
     school_logo = school_original.subsample(scale_factor, scale_factor)
 
-    gull_original = PhotoImage(file="gull.png")
-    gull_image = gull_original.subsample(scale_factor, scale_factor)
+    butterfly_original = PhotoImage(file="butterfly.png")
+    butterfly_image = butterfly_original.subsample(scale_factor, scale_factor)
 
-    owl_label = tk.Label(logo_container, image=owl_image, bg=COLORS['card_bg'])
+    moth_label = tk.Label(logo_container, image=moth_image, bg=COLORS['card_bg'])
     school_label = tk.Label(logo_container, image=school_logo, bg=COLORS['card_bg'])
-    gull_label = tk.Label(logo_container, image=gull_image, bg=COLORS['card_bg'])
+    butterfly_label = tk.Label(logo_container, image=butterfly_image, bg=COLORS['card_bg'])
 
-    owl_label.pack(side=tk.LEFT, padx=8)
-    school_label.pack(side=tk.LEFT, padx=8)
-    gull_label.pack(side=tk.LEFT, padx=8)
+    moth_label.pack(side=tk.LEFT, padx=15)
+    school_label.pack(side=tk.LEFT, padx=15)
+    butterfly_label.pack(side=tk.LEFT, padx=15)
 
     # Prevent garbage collection - need to keep both original and subsampled
-    owl_label.image = owl_image
-    owl_label.original = owl_original
+    moth_label.image = moth_image
+    moth_label.original = moth_original
     school_label.image = school_logo
     school_label.original = school_original
-    gull_label.image = gull_image
-    gull_label.original = gull_original
+    butterfly_label.image = butterfly_image
+    butterfly_label.original = butterfly_original
 except:
     # If images don't load, show a title instead
     title_label = tk.Label(
@@ -444,4 +444,10 @@ scrollbar.grid(row=0, column=1, sticky="ns")
 
 # Load settings and start
 load_settings()
+
+# Bring window to front on startup (but don't keep it on top)
+root.lift()
+root.attributes('-topmost', True)
+root.after_idle(root.attributes, '-topmost', False)
+
 root.mainloop()
