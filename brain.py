@@ -106,13 +106,15 @@ def update_observer_and_species_in_gpkg(directory, species_csv):
 
 def calculate_sampling_year(date):
     """
-    Calculate school year (sampling year) in format YYYY-YY based on non-calendar year (May 1 - April 30)
+    Calculate year (sampling year) in format YYYY-YY based on non-calendar year (May 1 - April 30)
+
+    NOTE: This populates the "year" column (previously called "school_year")
 
     Rules:
-    - If month is 5-12: school_year = "{year}-{last_two_of_year+1}"  (e.g., 14/08/2025 -> "2025-26")
-    - If month is 1-4: school_year = "{year-1}-{last_two_of_year}"  (e.g., 30/04/2025 -> "2024-25")
+    - If month is 5-12: year = "{year}-{last_two_of_year+1}"  (e.g., 14/08/2025 -> "2025-26")
+    - If month is 1-4: year = "{year-1}-{last_two_of_year}"  (e.g., 30/04/2025 -> "2024-25")
 
-    Returns the school year string (e.g., "2025-26")
+    Returns the sampling year string (e.g., "2025-26")
     """
     if pd.isna(date):
         return None
@@ -168,17 +170,20 @@ def create_main_copy(filepath, destination_folder):
     print(f"Copied original file to: {destination_filepath}")
 
 def load_main_data(filepath):
+    # NOTE: Column naming for downstream compatibility
+    # "year" = sampling year (YYYY-YY format, May 1 - April 30) - previously "school_year"
+    # "year1" = calendar year (standard year from date) - previously "calendar_year"
     target_columns = [
         "geom", "Date", "species", "obs", "height", "radius", "photoid",
-        "count", "school_year", "calendar_year", "month", "day", "comment", "type", "english_name", "Taxa"
+        "count", "year", "year1", "month", "day", "comment", "type", "english_name", "Taxa"
     ]
 
     layer_name = os.path.splitext(os.path.basename(filepath))[0]
     gdf = gpd.read_file(filepath, layer=layer_name)
     gdf = clean_geometry_and_observer(gdf)
 
-    # Drop old column names if they exist (year1 -> calendar_year transition)
-    old_columns_to_drop = ['year1']
+    # Drop old column names if they exist (school_year/calendar_year transition)
+    old_columns_to_drop = ['school_year', 'calendar_year']
     for old_col in old_columns_to_drop:
         if old_col in gdf.columns:
             gdf = gdf.drop(columns=[old_col])
@@ -191,11 +196,11 @@ def load_main_data(filepath):
 
     # Recalculate temporal columns from Date column if Date exists
     if "Date" in gdf.columns and not gdf["Date"].isna().all():
-        gdf["calendar_year"] = gdf["Date"].dt.year
+        gdf["year1"] = gdf["Date"].dt.year  # year1 = calendar year (previously "calendar_year")
         gdf["month"] = gdf["Date"].dt.month
         gdf["day"] = gdf["Date"].dt.day
-        gdf["school_year"] = gdf["Date"].apply(calculate_sampling_year)
-        print(f"Recalculated temporal columns (school_year, calendar_year, month, day) from Date")
+        gdf["year"] = gdf["Date"].apply(calculate_sampling_year)  # year = sampling year (previously "school_year")
+        print(f"Recalculated temporal columns (year, year1, month, day) from Date")
 
     # Reorder columns to match target structure
     gdf = gdf[target_columns]
@@ -205,9 +210,12 @@ def load_main_data(filepath):
 
 
 def load_student_data(directory):
+    # NOTE: Column naming for downstream compatibility
+    # "year" = sampling year (YYYY-YY format, May 1 - April 30) - previously "school_year"
+    # "year1" = calendar year (standard year from date) - previously "calendar_year"
     target_columns = [
         "geom", "Date", "species", "obs", "height", "radius", "photoid",
-        "count", "school_year", "calendar_year", "month", "day", "comment", "type", "english_name", "Taxa"
+        "count", "year", "year1", "month", "day", "comment", "type", "english_name", "Taxa"
     ]
     # Create a mapping from lowercase to canonical column name
     col_map = {col.lower(): col for col in target_columns}
@@ -229,8 +237,8 @@ def load_student_data(directory):
             }
             gdf = gdf.rename(columns=renamed_columns)
 
-            # Drop old column names if they exist (year1 -> calendar_year transition)
-            old_columns_to_drop = ['year1']
+            # Drop old column names if they exist (school_year/calendar_year transition)
+            old_columns_to_drop = ['school_year', 'calendar_year']
             for old_col in old_columns_to_drop:
                 if old_col in gdf.columns:
                     gdf = gdf.drop(columns=[old_col])
@@ -240,13 +248,13 @@ def load_student_data(directory):
                 if col not in gdf.columns:
                     gdf[col] = None
 
-            # Extract calendar_year (calendar year), month, day from datetime64[ns] Date column
-            gdf["calendar_year"] = gdf["Date"].dt.year
+            # Extract year1 (calendar year), month, day from datetime64[ns] Date column
+            gdf["year1"] = gdf["Date"].dt.year  # year1 = calendar year (previously "calendar_year")
             gdf["month"] = gdf["Date"].dt.month
             gdf["day"] = gdf["Date"].dt.day
 
-            # Calculate school_year (May 1 - April 30 format: YYYY-YY)
-            gdf["school_year"] = gdf["Date"].apply(calculate_sampling_year)
+            # Calculate year (May 1 - April 30 format: YYYY-YY)
+            gdf["year"] = gdf["Date"].apply(calculate_sampling_year)  # year = sampling year (previously "school_year")
 
             # Reorder columns to ensure consistency
             gdf = gdf[target_columns]
@@ -273,9 +281,12 @@ def load_student_data(directory):
         return None
 
 def merge_and_update_main(main_gdf, student_gdf, output_path):
+    # NOTE: Column naming for downstream compatibility
+    # "year" = sampling year (YYYY-YY format, May 1 - April 30) - previously "school_year"
+    # "year1" = calendar year (standard year from date) - previously "calendar_year"
     target_columns = [
         "geom", "Date", "species", "obs", "height", "radius", "photoid",
-        "count", "school_year", "calendar_year", "month", "day", "comment", "type", "english_name", "Taxa"
+        "count", "year", "year1", "month", "day", "comment", "type", "english_name", "Taxa"
     ]
     subset = ["geom", "species", "obs"]
 
