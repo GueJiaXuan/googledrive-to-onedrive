@@ -264,8 +264,6 @@ def safe_run_pipeline(directory, species_csv, main_file, directory_copy=""):
     try:
         from brain import run_pipeline
         run_pipeline(directory, species_csv, main_file, directory_copy)
-        print("\n✓ Pipeline completed successfully!")
-
     except Exception as e:
         error_type = type(e).__name__
         error_msg = str(e)
@@ -323,6 +321,8 @@ def safe_run_pipeline(directory, species_csv, main_file, directory_copy=""):
 
         # Re-raise the error so the UI still shows it
         raise
+    else:
+        print("\n✓ Pipeline completed successfully!")
 
 
 if __name__ == "__main__":

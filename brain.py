@@ -1,127 +1,88 @@
 import glob
 import os
-import pandas as pd
-import geopandas as gpd
 import re
 import fiona
+import pyogrio
+import hashlib 
+import pandas as pd
+import geopandas as gpd
 from datetime import datetime
+from shapely import wkt
+from shapely.geometry.base import BaseGeometry
 
-def update_observer_and_species_in_gpkg(directory, species_csv):
-    """
-    Updates the 'observer' column in .gpkg files using an Excel sheet and replaces
-    'type' and 'english_name' based on species matching from a CSV file.
+# ==============================
+# --- Constants / Configuration ---
+# ==============================
+# Target Columns
+    # This is the master list of all columns we want in every dataset,
+    # in a consistent order. Even if some columns are missing in the input files,
+    # they will be added automatically.
+TARGET_COLUMNS = [
+    "geom",          # Location of the observation (geometry for mapping)
+    "Date",          # Date of the observation
+    "species",       # Observed species
+    "obs",           # Name of the observer
+    "height",        # Plant height (optional)
+    "radius",        # Plant radius (optional)
+    "photoid",       # Photo ID for any pictures taken (optional)
+    "count",         # Number of plants/animals observed
+    "year",          # Sampling year (May-Apr) e.g., 2025-26
+    "year1",         # Calendar year (Jan-Dec) from the date
+    "month",         # Month of observation
+    "day",           # Day of observation
+    "comment",       # Notes or comments (optional)
+    "type",          # Taxonomic type from species mapping
+    "english_name",  # English species name
+    "Taxa"           # Taxonomic classification
+]
 
-    Input:
-    directory (str): Path to directory with .gpkg files and Excel sheet
-    species_csv (str): Path to species CSV file
+# Flexible Column Mapping
+    # Maps possible variations of column names (from different QGIS/GPKG exports)
+    # to our standard names used in the pipeline.
+    # This makes the code robust against minor column name changes.
+COLUMN_MAPPING = {
+    "observer": "obs",
+    "Observer Name": "obs",
+    "geometry": "geom",
+    "geom": "geom",
+    "species": "species",
+    "Species Name": "species",
+    "Date": "Date",
+    "date_obs": "Date",
+    "school_year": "year",
+    "calendar_year": "year1",
+    "type": "type",
+    "english_name": "english_name",
+    "height": "height",
+    "radius": "radius",
+    "photoid": "photoid",
+    "count": "count",
+    "month": "month",
+    "day": "day",
+    "comment": "comment",
+    "Taxa": "Taxa"
+}
 
-    Output:
-    None (updates files in place)
-    """
+# Text Fields
+    # Columns that contain text and should be “cleaned” to avoid issues,
+    # like extra spaces. For example, "oak " and "oak" would be treated the same.
+TEXT_FIELDS = ["species", "obs"]
 
-    # Load species mapping CSV
-    species_df = pd.read_csv(species_csv, encoding='ISO-8859-1')
+# ==============================
+# --- Utility Functions ---
+# ==============================
+# Calculate year (sampling year) in format YYYY-YY based on non-calendar year (May 1 - April 30)
+    # NOTE: This populates the "year" column (previously called "school_year")
 
-    # Clean the species column to remove any trailing/leading whitespace
-    species_df['species'] = species_df['species'].str.strip()
+    # Rules:
+        # If month is 5-12: year = "{year}-{last_two_of_year+1}"  (e.g., 14/08/2025 -> "2025-26")
+        # If month is 1-4: year = "{year-1}-{last_two_of_year}"  (e.g., 30/04/2025 -> "2024-25")
 
-    # Check for and handle duplicates
-    if species_df['species'].duplicated().any():
-        print(f"Warning: Found {species_df['species'].duplicated().sum()} duplicate species in {species_csv}")
-        print("Keeping first occurrence of each duplicate species...")
-        species_df = species_df.drop_duplicates(subset=['species'], keep='first')
-
-    species_mapping = species_df.set_index('species')[['type', 'english_name']].to_dict(orient='index')
-
-    # Find Excel file
-    excel_files = glob.glob(os.path.join(directory, "*.xlsx"))
-    if not excel_files:
-        print("Error: No Excel sheet found in the directory.")
-        return
-    excel_file = excel_files[0]
-
-    # Read Excel data
-    df = pd.read_excel(excel_file)
-
-    id_to_name = {}
-    for _, row in df.iterrows():
-        links_cell = row['Upload your gpkg files here']
-        name = str(row['Include your name here']).strip()
-        if pd.isna(links_cell) or pd.isna(name):
-            continue
-
-        links = re.findall(r'https?://[^\s,]+', str(links_cell))
-        for link in links:
-            if 'id=' in link:
-                file_id = link.split('id=')[1].split('&')[0]
-                id_to_name[file_id] = name
-
-    # Process each .gpkg file
-    gpkg_files = glob.glob(os.path.join(directory, "*.gpkg"))
-
-    for file_path in gpkg_files:
-        file_name = os.path.basename(file_path)
-        file_id = os.path.splitext(file_name)[0]
-
-        if file_id not in id_to_name:
-            print(f"Skipping {file_name}: No matching entry in Excel sheet.")
-            continue
-
-        observer_name = id_to_name[file_id]
-
-        try:
-            gdf = gpd.read_file(file_path)
-        except Exception as e:
-            print(f"Error reading {file_name}: {str(e)}")
-            continue
-
-        # Update observer
-        if 'observer' in gdf.columns:
-            gdf['observer'] = observer_name
-            print(f"Updated 'observer' in {file_name}")
-        else:
-            print(f"Warning: {file_name} has no 'observer' column.")
-
-        # Update type and english_name based on species
-        if 'species' in gdf.columns:
-            # Check for species not in mapping
-            unmapped_species = set(gdf['species'].dropna()) - set(species_mapping.keys())
-            if unmapped_species:
-                print(f"Warning: {len(unmapped_species)} species in {file_name} not found in species.csv:")
-                for species in list(unmapped_species)[:5]:  # Show first 5
-                    print(f"  - {species}")
-                if len(unmapped_species) > 5:
-                    print(f"  ... and {len(unmapped_species) - 5} more")
-
-            gdf['type'] = gdf['species'].map(lambda sp: species_mapping.get(sp, {}).get('type', gdf.get('type')))
-            gdf['english_name'] = gdf['species'].map(lambda sp: species_mapping.get(sp, {}).get('english_name', gdf.get('english_name')))
-            print(f"Updated 'type' and 'english_name' in {file_name}")
-        else:
-            print(f"Warning: {file_name} has no 'species' column.")
-
-        # Save back using layer = file name (no extension)
-        layer_name = file_id
-        gdf.to_file(file_path, driver="GPKG", layer=layer_name)
-        print(f"Saved updates to {file_name}")
-
+    # Returns the sampling year string (e.g., "2025-26")
 def calculate_sampling_year(date):
-    """
-    Calculate year (sampling year) in format YYYY-YY based on non-calendar year (May 1 - April 30)
-
-    NOTE: This populates the "year" column (previously called "school_year")
-
-    Rules:
-    - If month is 5-12: year = "{year}-{last_two_of_year+1}"  (e.g., 14/08/2025 -> "2025-26")
-    - If month is 1-4: year = "{year-1}-{last_two_of_year}"  (e.g., 30/04/2025 -> "2024-25")
-
-    Returns the sampling year string (e.g., "2025-26")
-    """
     if pd.isna(date):
         return None
-
-    year = date.year
-    month = date.month
-
+    year, month = date.year, date.month
     if month >= 5:  # May to December
         # Format: year-next_year (e.g., 2025-26)
         next_year_short = str(year + 1)[-2:]
@@ -131,236 +92,291 @@ def calculate_sampling_year(date):
         year_short = str(year)[-2:]
         return f"{year - 1}-{year_short}"
 
+# Standardize and clean a GeoDataFrame (the converted .gpkg file)
+    # So all student files become consistent  
+    # with the same column names, geometry column, coordinate system, date fields and column order
+def standardize_gdf(gdf, target_columns=TARGET_COLUMNS):
+    if gdf.empty:
+        return gdf
 
-def clean_geometry_and_observer(gdf):
-    if gdf.crs and gdf.crs.to_string() != "EPSG:4326":
-        gdf = gdf.to_crs("EPSG:4326")
-    if "observer" in gdf.columns:
-        gdf = gdf.rename(columns={"observer": "obs"})
-    if "geometry" in gdf.columns:
-        gdf = gdf.rename(columns={"geometry": "geom"})
-    gdf = gdf.set_geometry("geom")
-    if "geometry" in gdf.columns:
-        gdf = gdf.drop(columns="geometry")
-    return gdf
+    # Rename columns according to the flexible column mapping
+    rename_dict = {col: COLUMN_MAPPING[col] for col in gdf.columns if col in COLUMN_MAPPING}
+    gdf = gdf.rename(columns=rename_dict)
 
+    # Remove duplicate columns 
+    gdf = gdf.loc[:, ~gdf.columns.duplicated()]
 
-def create_main_copy(filepath, destination_folder):
-    """
-    Create a dated copy of the main .gpkg file in a destination folder,
-    Input:
-    filepath (str): Path to the original .gpkg file.
-    destination_folder (str): Folder where the copy should be saved.
+    # Ensure valid geometry column 
+    if "geom" in gdf.columns:
+        # Convert geometry strings to a shapely geometry object
+        gdf["geom"] = gdf["geom"].apply(lambda x: wkt.loads(str(x)) if x and not isinstance(x, BaseGeometry) else x)
+        # Drop any extra geometry columns
+        extra_geom_cols = [c for c in gdf.columns if isinstance(gdf[c].dtype, gpd.array.GeometryDtype) and c != "geom"]
+        gdf = gdf.drop(columns=extra_geom_cols)
+        # Set geometry and CRS to indicate this column contains spatial data 
+        gdf = gdf.set_geometry("geom", inplace=False)
+        if gdf.crs is None:
+            gdf.set_crs("EPSG:4326", inplace=True)
+            # if no coordinate system exists, assume EPSG:4326 (WGS84 lat/long standard GPS system)
+        elif gdf.crs.to_string() != "EPSG:4326":
+            # if the CRS is different, converts it so all files use the same map projection
+            gdf = gdf.to_crs("EPSG:4326")
+    else:
+        # If no geometry, just warn
+        print("Warning: 'geom' column missing, skipping CRS assignment.")
 
-    Output:
-    None
-    """
-    datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M")
-    filename = os.path.basename(filepath)
-    name, ext = os.path.splitext(filename)
-    dated_filename = f"{name}_({datetime_str}){ext}"
-    destination_filepath = os.path.join(destination_folder, dated_filename)
+    # Clean text fields 
+    for col in TEXT_FIELDS:
+        if col in gdf.columns:
+            gdf[col] = gdf[col].astype(str).str.strip()
 
-    with open(filepath, 'rb') as original_file:
-        data = original_file.read()
-
-    with open(destination_filepath, 'wb') as backup_file:
-        backup_file.write(data)
-
-    print(f"Copied original file to: {destination_filepath}")
-
-def load_main_data(filepath):
-    # NOTE: Column naming for downstream compatibility
-    # "year" = sampling year (YYYY-YY format, May 1 - April 30) - previously "school_year"
-    # "year1" = calendar year (standard year from date) - previously "calendar_year"
-    target_columns = [
-        "geom", "Date", "species", "obs", "height", "radius", "photoid",
-        "count", "year", "year1", "month", "day", "comment", "type", "english_name", "Taxa"
-    ]
-
-    layer_name = os.path.splitext(os.path.basename(filepath))[0]
-    gdf = gpd.read_file(filepath, layer=layer_name)
-    gdf = clean_geometry_and_observer(gdf)
-
-    # Drop old column names if they exist (school_year/calendar_year transition)
-    old_columns_to_drop = ['school_year', 'calendar_year']
-    for old_col in old_columns_to_drop:
-        if old_col in gdf.columns:
-            gdf = gdf.drop(columns=[old_col])
-            print(f"Dropped old column '{old_col}' from main file")
-
-    # Add missing columns as None
+    # Fill missing columns 
     for col in target_columns:
         if col not in gdf.columns:
             gdf[col] = None
 
-    # Recalculate temporal columns from Date column if Date exists
-    if "Date" in gdf.columns and not gdf["Date"].isna().all():
-        gdf["year1"] = gdf["Date"].dt.year  # year1 = calendar year (previously "calendar_year")
+    # Standardize date fields to datetime objects
+    if "Date" in gdf.columns:
+        gdf["Date"] = parse_date_column(gdf["Date"])
+        gdf["year1"] = gdf["Date"].dt.year
         gdf["month"] = gdf["Date"].dt.month
         gdf["day"] = gdf["Date"].dt.day
-        gdf["year"] = gdf["Date"].apply(calculate_sampling_year)  # year = sampling year (previously "school_year")
-        print(f"Recalculated temporal columns (year, year1, month, day) from Date")
+        gdf["year"] = gdf["Date"].apply(calculate_sampling_year)
 
-    # Reorder columns to match target structure
+    # Reorder columns 
     gdf = gdf[target_columns]
 
-    print(f"Main file '{filepath}' loaded with {len(gdf)} records from layer '{layer_name}'")
+    # Drop rows with missing geometry (prevents fake new records) 
+    gdf = gdf.dropna(subset=["geom"])
+
     return gdf
 
+# Read species CSV and return a mapping dict for 'type' and 'english_name'.
+def read_species_mapping(species_csv):
+    df = pd.read_csv(species_csv, encoding="ISO-8859-1")
+    df['species'] = df['species'].astype(str).str.strip()
+    df = df.drop_duplicates(subset=['species'], keep='first')
+    return df.set_index('species')[['type', 'english_name']].to_dict(orient='index')
 
-def load_student_data(directory):
-    # NOTE: Column naming for downstream compatibility
-    # "year" = sampling year (YYYY-YY format, May 1 - April 30) - previously "school_year"
-    # "year1" = calendar year (standard year from date) - previously "calendar_year"
-    target_columns = [
-        "geom", "Date", "species", "obs", "height", "radius", "photoid",
-        "count", "year", "year1", "month", "day", "comment", "type", "english_name", "Taxa"
-    ]
-    # Create a mapping from lowercase to canonical column name
-    col_map = {col.lower(): col for col in target_columns}
+# Extract {file_id: observer_name} mapping from form sheet in directory.
+    # So the pipeline can automatically fill the observer column for each .gpkg 
+def extract_excel_mapping(directory):
+    excel_files = glob.glob(os.path.join(directory, "*.xlsx"))
+    if not excel_files:
+        raise FileNotFoundError("No Excel file found in directory.")
+    # Read the form submission sheet 
+    df = pd.read_excel(excel_files[0])
+    id_to_name = {}
+    for _, row in df.iterrows():
+        links_cell = row.get('Upload your gpkg files here')
+        name = str(row.get('Include your name here', "")).strip()
+        if pd.isna(links_cell) or not name:
+            continue
+        # Extract Google Drive upload links from the form cell
+        links = re.findall(r'https?://[^\s,]+', str(links_cell))
+        for link in links:
+            if 'id=' in link:
+                # Extract the Google Drive file ID from the link
+                file_id = link.split('id=')[1].split('&')[0]
+                # Match the file ID with the student's name
+                id_to_name[file_id] = name
+    # Return dictionary mapping: file id to student name 
+    return id_to_name
 
-    gpkg_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith(".gpkg")]
-    combined = []
+#  Safely parse a column as datetime.
+    # Handles strings in multiple formats
+    # Handles Excel numeric dates
+def parse_date_column(col):
+    # Try pandas automatic parsing first
+    dt = pd.to_datetime(col, errors="coerce")
+    # If all values are NaT (cannot parse date) and column is numeric, assume Excel numeric dates
+    if dt.isna().all() and pd.api.types.is_numeric_dtype(col):
+        dt = pd.to_datetime('1899-12-30') + pd.to_timedelta(col, unit='D')
+    return dt
+
+# Create a coordinate key for geometry, to compare locations
+def geom_key(geom, precision=5):
+    if geom is None:
+        return None
+    try:
+        return f"{round(geom.x, precision)}_{round(geom.y, precision)}"
+    except Exception:
+        return None
+        
+# ==============================
+# --- Core Processing Functions ---
+# ==============================
+# Update observer, type, and english_name fields in all GPKG files in a directory.
+    # Updates the 'observer' column in .gpkg files using an Excel sheet and replaces
+    # 'type' and 'english_name' based on species matching from a CSV file.
+
+    # Input:
+    # directory (str): Path to directory with .gpkg files and Excel sheet
+    # species_csv (str): Path to species CSV file
+
+    # Output:
+    # None (updates files in place)
+def update_observer_and_species_in_gpkg(directory, species_csv):
+    species_mapping = read_species_mapping(species_csv)
+    id_to_name = extract_excel_mapping(directory)
+    gpkg_files = glob.glob(os.path.join(directory, "*.gpkg"))
 
     for path in gpkg_files:
+        file_id = os.path.splitext(os.path.basename(path))[0]
+        observer_name = id_to_name.get(file_id)
+        if not observer_name:
+            print(f"Skipping {file_id}: No observer mapping found.")
+            continue
+
         try:
-            layer_name = fiona.listlayers(path)[0]
+            layers = pyogrio.list_layers(path)
+            layer_name = layers[0][0]  # first layer name
             gdf = gpd.read_file(path, layer=layer_name)
-            gdf = clean_geometry_and_observer(gdf)
-
-            # Normalize existing column names: lowercase + remap to correct casing
-            renamed_columns = {
-                col: col_map[col.strip().lower()]
-                for col in gdf.columns
-                if col.strip().lower() in col_map
-            }
-            gdf = gdf.rename(columns=renamed_columns)
-
-            # Drop old column names if they exist (school_year/calendar_year transition)
-            old_columns_to_drop = ['school_year', 'calendar_year']
-            for old_col in old_columns_to_drop:
-                if old_col in gdf.columns:
-                    gdf = gdf.drop(columns=[old_col])
-
-            # Add missing columns as None
-            for col in target_columns:
-                if col not in gdf.columns:
-                    gdf[col] = None
-
-            # Extract year1 (calendar year), month, day from datetime64[ns] Date column
-            gdf["year1"] = gdf["Date"].dt.year  # year1 = calendar year (previously "calendar_year")
-            gdf["month"] = gdf["Date"].dt.month
-            gdf["day"] = gdf["Date"].dt.day
-
-            # Calculate year (May 1 - April 30 format: YYYY-YY)
-            gdf["year"] = gdf["Date"].apply(calculate_sampling_year)  # year = sampling year (previously "school_year")
-
-            # Reorder columns to ensure consistency
-            gdf = gdf[target_columns]
-
-            combined.append(gdf)
-            print(f"Student file '{path}' loaded with {len(gdf)} records from layer '{layer_name}'")
-
         except Exception as e:
-            print(f"Skipping '{path}': {e}")
+            print(f"Error reading {path}: {e}")
+            continue
 
-    if combined:
-        combined_gdf = pd.concat(combined, ignore_index=True)
+        # Update observer & species info 
+        if 'species' in gdf.columns:
+            gdf['type'] = gdf['species'].map(lambda sp: species_mapping.get(sp, {}).get('type'))
+            gdf['english_name'] = gdf['species'].map(lambda sp: species_mapping.get(sp, {}).get('english_name'))
+        if 'observer' in gdf.columns:
+            gdf['observer'] = observer_name
 
-        # Drop rows with missing date in date column (e.g. null)
-        before_drop = len(combined_gdf)
-        combined_gdf = combined_gdf.dropna(subset=["Date"])
-        after_drop = len(combined_gdf)
-        print(f"Dropped {before_drop - after_drop} records with missing Date.")
+        # Standardize everything (geometry, text, dates, columns) 
+        gdf = standardize_gdf(gdf, TARGET_COLUMNS)
 
-        print(f"Total combined student records: {len(combined_gdf)}")
-        return combined_gdf
-    else:
-        print("No valid student GPKG files found.")
+        # Save safely 
+        layer_name = file_id
+        gdf.to_file(path, driver="GPKG", layer=layer_name)
+        print(f"Updated {os.path.basename(path)} (geom safely handled)")
+
+# Load a individual GPKG file (first layer) and standardize it.
+def load_gpkg(path, target_columns=TARGET_COLUMNS):
+    layer = fiona.listlayers(path)[0]
+    gdf = gpd.read_file(path, layer=layer)
+    return standardize_gdf(gdf, target_columns)
+
+# Load all student GPKG files in a directory and combine them.
+    # Args:
+    #     directory (str): Folder containing student .gpkg files
+    #     target_columns (list[str]): Columns to keep and order
+
+    # Returns:
+    #     GeoDataFrame: Combined standardized student data
+def load_student_data(directory, target_columns=TARGET_COLUMNS):
+    combined_data = []
+    for path in glob.glob(os.path.join(directory, "*.gpkg")):
+        try:
+            gdf = load_gpkg(path, target_columns)
+            combined_data.append(gdf)
+            print(f"Loaded {len(gdf)} records from {os.path.basename(path)}")
+        except Exception as e:
+            print(f"Skipping {os.path.basename(path)}: {e}")
+
+    if not combined_data:
+        print("No valid student data found.")
         return None
 
-def merge_and_update_main(main_gdf, student_gdf, output_path):
-    # NOTE: Column naming for downstream compatibility
-    # "year" = sampling year (YYYY-YY format, May 1 - April 30) - previously "school_year"
-    # "year1" = calendar year (standard year from date) - previously "calendar_year"
-    target_columns = [
-        "geom", "Date", "species", "obs", "height", "radius", "photoid",
-        "count", "year", "year1", "month", "day", "comment", "type", "english_name", "Taxa"
+    combined_gdf = pd.concat(combined_data, ignore_index=True)
+    before_drop = len(combined_gdf)
+    combined_gdf = combined_gdf.dropna(subset=["Date"])
+    print(f"Dropped {before_drop - len(combined_gdf)} records with missing Date")
+    print(f"Total combined student records: {len(combined_gdf)}")
+    return combined_gdf
+
+# Creates a unique hash for each observation, used for duplicate detection
+    # Key fields used are species, observer, date, x coordinate and y coordinate
+def row_fingerprint(row):
+    values = [
+        str(row.get("species", "")).strip().lower(),
+        str(row.get("obs", "")).strip().lower(),
+        str(row.get("Date", "")),
+        str(round(row.geom.x, 5) if row.geom else ""),
+        str(round(row.geom.y, 5) if row.geom else "")
     ]
-    subset = ["geom", "species", "obs"]
+    key = "|".join(values)
+    return hashlib.md5(key.encode()).hexdigest()
 
-    # Safety check
-    for col in subset:
-        if col not in main_gdf.columns or col not in student_gdf.columns:
-            print(f"Error: Missing required column '{col}' in input data.")
-            return
+# Duplicate detection: find records that exist in student data but not in main dataset.
+def detect_new_records(main_gdf, student_gdf):
+    # compute the unique hash fingerprints 
+    main_gdf["fingerprint"] = main_gdf.apply(row_fingerprint, axis=1)
+    student_gdf["fingerprint"] = student_gdf.apply(row_fingerprint, axis=1)
 
-    student_gdf = student_gdf.drop_duplicates()
+    # Check if student fingerprints already exist in main dataset 
+    new_records = student_gdf[~student_gdf["fingerprint"].isin(main_gdf["fingerprint"])].copy()
 
-    def is_duplicate(row):
-        return ((main_gdf[subset] == row[subset]).all(axis=1)).any()
+    # Returns rows in student_gdf that are not in main_gdf.
+    main_gdf.drop(columns=["fingerprint"], inplace=True)
+    student_gdf.drop(columns=["fingerprint"], inplace=True)
+    return new_records
 
-    new_data = student_gdf[~student_gdf.apply(is_duplicate, axis=1)]
-
-    print(f"Number of non-duplicate records: {len(new_data)}")
-
-    if not new_data.empty:
-        print(f"Merging {len(new_data)} new records with {len(main_gdf)} existing records")
-
-        # Combine main data with new data
-        combined_gdf = pd.concat([main_gdf, new_data], ignore_index=True)
-
-        # Ensure column order
-        combined_gdf = combined_gdf[target_columns]
-
-        # Write the entire combined dataset (overwrites the file with correct structure)
-        layer_name = os.path.splitext(os.path.basename(output_path))[0]
-        combined_gdf.to_file(output_path, layer=layer_name, driver="GPKG")
-        print(f"✓ Updated main GPKG with {len(combined_gdf)} total records")
-    else:
-        print("No new records to append.")
-
-        # Still rewrite the main file with correct column structure even if no new data
-        main_gdf = main_gdf[target_columns]
-        layer_name = os.path.splitext(os.path.basename(output_path))[0]
-        main_gdf.to_file(output_path, layer=layer_name, driver="GPKG")
-        print(f"✓ Main GPKG structure updated with {len(main_gdf)} records")
-
-
-def run_pipeline(directory, species_csv, main_file, directory_copy):
-
-    from brain import (
-        update_observer_and_species_in_gpkg,
-        load_main_data,
-        load_student_data,
-        merge_and_update_main,
-    )
-
-    # Validate Excel
-    excel_files = glob.glob(os.path.join(directory, "*.xlsx"))
-    if len(excel_files) != 1:
-        print("Error: There must be exactly one Excel file in the directory.")
+#  Merge student data into main GPKG, remove duplicates, and save updated main file.
+def merge_and_update_main(main_gdf, student_gdf, output_path, target_columns=TARGET_COLUMNS):
+    if student_gdf is None or student_gdf.empty:
+        print("No student data to merge.")
         return
 
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Detect new records
+    new_records = detect_new_records(main_gdf, student_gdf)
+    print(f"New student records to merge: {len(new_records)}")
 
-    # Step 1: Update Gpkg Files in the Directory
-    update_observer_and_species_in_gpkg(directory, species_csv)
+    # DEBUG: show the records that are being treated as new
+    if len(new_records) > 0:
+        print("DEBUG – records considered new:")
+        print(new_records[["species", "obs", "geom"]])
+        
+    # Merge
+    if not new_records.empty:
+        combined_gdf = pd.concat([main_gdf, new_records], ignore_index=True)
+    else:
+        combined_gdf = main_gdf.copy()
 
-    # Step 1.5: Create a copy of the main data
-    create_main_copy(main_file, directory_copy)
+    # Ensure all target columns exist
+    for col in target_columns:
+        if col not in combined_gdf.columns:
+            combined_gdf[col] = None
 
-    # Step 2: Find Main File
-    main = load_main_data(main_file)
+    # Re-validate date columns 
+    if "Date" in combined_gdf.columns:
+        combined_gdf["Date"] = parse_date_column(combined_gdf["Date"])
+        combined_gdf["year1"] = combined_gdf["Date"].dt.year
+        combined_gdf["month"] = combined_gdf["Date"].dt.month
+        combined_gdf["day"] = combined_gdf["Date"].dt.day
+        combined_gdf["year"] = combined_gdf["Date"].apply(calculate_sampling_year)
 
-    # Step 3: Combine Gpkg Files in the Directory
-    student = load_student_data(directory)
+    # Reorder columns
+    combined_gdf = combined_gdf[target_columns]
 
-    # Step 4: Combine Main file and Student's File, Remove all Duplicates, and then append deduplicated data that is not
-    # present in the main file to the main file
-    merge_and_update_main(main, student, main_file)
+    # Save updated GPKG
+    layer_name = os.path.splitext(os.path.basename(output_path))[0]
+    combined_gdf.to_file(output_path, layer=layer_name, driver="GPKG")
+    print(f"Main GPKG updated: {len(combined_gdf)} total records")
+
+# Create a dated copy of the main .gpkg file in a destination folder
+    # Input:
+    # - filepath (str): Path to the original .gpkg file.
+    # - destination_folder (str): Folder where the copy should be saved.
+def create_main_copy(filepath, destination_folder):
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    name, ext = os.path.splitext(os.path.basename(filepath))
+    destination = os.path.join(destination_folder, f"{name}_({timestamp}){ext}")
+    with open(filepath, 'rb') as src, open(destination, 'wb') as dst:
+        dst.write(src.read())
+    print(f"Backup created: {destination}")
 
 
-
-
+# ==============================
+# --- Pipeline ---
+# ==============================
+# Full pipeline: update GPKGs, backup main file, merge student data.
+def run_pipeline(directory, species_csv, main_file, backup_folder):
+    try:
+        update_observer_and_species_in_gpkg(directory, species_csv)
+        create_main_copy(main_file, backup_folder)
+        main_gdf = standardize_gdf(load_gpkg(main_file), TARGET_COLUMNS)
+        student_gdf = standardize_gdf(load_student_data(directory), TARGET_COLUMNS)
+        merge_and_update_main(main_gdf, student_gdf, main_file)
+    except Exception as e:
+        print(f"Pipeline failed: {e}")
