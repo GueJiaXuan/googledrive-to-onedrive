@@ -26,12 +26,12 @@ STANDARD_COLUMNS = [
     {"name": "english_name", "datatype": "text", "alt_names": ["english_name", "english name", "english"]},  # English name of species 
     {"name": "type", "datatype": "text", "alt_names": ["type"]}, # Type of species mapped from CSV file: 'species list' 
     {"name": "date", "datatype": "date", "alt_names": ["date", "date_obs"]}, # Date of the observation
-    {"name": "samp_year", "datatype": "text", "alt_names": ["samp_year", "school_year", "year"]}, # The ecological year (May to April) during which the observation was made.
-    {"name": "cal_year", "datatype": "numeric", "alt_names": ["cal_year", "calendar_year", "year1"]}, # The normal January to December year of the observation.
+    {"name": "year", "datatype": "text", "alt_names": ["school_year", "year"]}, # The ecological year (May to April) during which the observation was made.
+    {"name": "year1", "datatype": "numeric", "alt_names": ["calendar_year", "year1"]}, # The normal January to December year of the observation.
     {"name": "month", "datatype": "numeric", "alt_names": ["month"]}, # Month of observation - taken from date
     {"name": "day", "datatype": "numeric", "alt_names": ["day"]},  # Day of observation - taken from date 
     {"name": "taxa", "datatype": "text", "alt_names": ["taxa"]},  # Taxonomic classification
-    {"name": "observer", "datatype": "text", "alt_names": ["observer", "observer name", "obs"]},  # Name of the observer
+    {"name": "obs", "datatype": "text", "alt_names": ["observer", "observer name", "obs"]},  # Name of the observer
     {"name": "comment", "datatype": "text", "alt_names": ["comment"]}, # Notes or comments (optional)
     {"name": "height", "datatype": "numeric", "alt_names": ["height"]},  # Observed height (optional)
     {"name": "radius", "datatype": "numeric", "alt_names": ["radius"]}, # Observed radius (optional)
@@ -62,7 +62,7 @@ def standardise(gdf, label="gdf"):
     gdf = parse_dates(gdf)
 
     # drop any rows where critical data is missing 
-    critical_cols = ["geom", "species", "date", "observer"] # these are the minimum fields needed for a valid observation
+    critical_cols = ["geom", "species", "date", "obs"] # these are the minimum fields needed for a valid observation
     existing_critical_cols = [col for col in critical_cols if col in gdf.columns] 
     if existing_critical_cols: # checking if the columns exist first 
         before_drop = len(gdf)
@@ -99,12 +99,12 @@ def clean_invalid_rows(gdf, min_year=2020, label="gdf"):
     # drop any rows with invalid observers
     bad_observers = ["Jackson Robinson"] # can expand list as needed
     before = len(gdf)
-    gdf = gdf[~gdf["observer"].isin(bad_observers)]
+    gdf = gdf[~gdf["obs"].isin(bad_observers)]
     print(f"Dropped {before - len(gdf)} records from {label} with invalid observers: {', '.join(bad_observers)}")
 
     # drop any rows where the year is < min year
     before = len(gdf)
-    gdf = gdf[gdf["cal_year"] >= min_year]
+    gdf = gdf[gdf["year1"] >= min_year]
     print(f"Dropped {before - len(gdf)} records from {label} with calendar year before {min_year}")
     return gdf
 
@@ -128,10 +128,10 @@ def parse_dates(gdf):
     date_col = next((column["name"] for column in STANDARD_COLUMNS if column["datatype"] == "date"), None)
     if date_col and date_col in gdf.columns:
         gdf[date_col] = pd.to_datetime(gdf[date_col], errors="coerce") #converts to datetime format, coercing any invalid formats to NaT (Not a Time)
-        gdf["cal_year"] = gdf[date_col].dt.year
+        gdf["year1"] = gdf[date_col].dt.year
         gdf["month"] = gdf[date_col].dt.month
         gdf["day"] = gdf[date_col].dt.day
-        gdf["samp_year"] = gdf.apply(calculate_sampling_year, axis=1)
+        gdf["year"] = gdf.apply(calculate_sampling_year, axis=1)
     return gdf
 
 # Calculate year (sampling year) in format YYYY-YY based on non-calendar year (May 1 - April 30)
@@ -250,7 +250,7 @@ def detect_and_remove_duplicates(gdf, label="gdf"):
     if gdf is None or gdf.empty:
         return gdf
     # define uniqueness of an observation
-    group_cols = ["cal_year", "month", "day", "geom", "species"]
+    group_cols = ["year1", "month", "day", "geom", "species"]
     # groups records using the defined columns and keeps only the first occurrence to drop duplicates
     existing_cols = [col for col in group_cols if col in gdf.columns]
     before = len(gdf)
