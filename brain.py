@@ -25,7 +25,7 @@ STANDARD_COLUMNS = [
     {"name": "species", "datatype": "text", "alt_names": ["species", "species name", "scientific_name", "scientific name"]}, # Observed species
     {"name": "english_name", "datatype": "text", "alt_names": ["english_name", "english name", "english"]},  # English name of species 
     {"name": "type", "datatype": "text", "alt_names": ["type"]}, # Type of species mapped from CSV file: 'species list' 
-    {"name": "date", "datatype": "date", "alt_names": ["date", "date_obs"]}, # Date of the observation
+    {"name": "Date", "datatype": "date", "alt_names": ["date", "date_obs"]}, # Date of the observation
     {"name": "year", "datatype": "text", "alt_names": ["school_year", "year"]}, # The ecological year (May to April) during which the observation was made.
     {"name": "year1", "datatype": "numeric", "alt_names": ["calendar_year", "year1"]}, # The normal January to December year of the observation.
     {"name": "month", "datatype": "numeric", "alt_names": ["month"]}, # Month of observation - taken from date
@@ -62,7 +62,7 @@ def standardise(gdf, label="gdf"):
     gdf = parse_dates(gdf)
 
     # drop any rows where critical data is missing 
-    critical_cols = ["geom", "species", "date", "obs"] # these are the minimum fields needed for a valid observation
+    critical_cols = ["geom", "species", "Date", "obs"] # these are the minimum fields needed for a valid observation
     existing_critical_cols = [col for col in critical_cols if col in gdf.columns] 
     if existing_critical_cols: # checking if the columns exist first 
         before_drop = len(gdf)
@@ -136,9 +136,9 @@ def parse_dates(gdf):
 
 # Calculate year (sampling year) in format YYYY-YY based on non-calendar year (May 1 - April 30)
 def calculate_sampling_year(row):
-    if pd.isna(row["date"]):
+    if pd.isna(row["Date"]):
         return None
-    year, month = row["date"].year, row["date"].month 
+    year, month = row["Date"].year, row["Date"].month 
     if month >= 5: # May to December
         return f"{year}-{str(year+1)[-2:]}"  # Format: year-next_year (e.g., 2025-26)
     else:  # January to April
