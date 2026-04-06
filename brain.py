@@ -97,10 +97,13 @@ def standardise(gdf, label="gdf"):
 # drop any rows with invalid observers or calendar years before 2020 (can adjust year threshold as needed)
 def clean_invalid_rows(gdf, min_year=2020, label="gdf"):
     # drop any rows with invalid observers
-    bad_observers = ["Jackson Robinson"] # can expand list as needed
-    before = len(gdf)
-    gdf = gdf[~gdf["obs"].isin(bad_observers)]
-    print(f"Dropped {before - len(gdf)} records from {label} with invalid observers: {', '.join(bad_observers)}")
+    # bad_observers = ["Jackson Robinson"] # can expand list as needed
+    # before = len(gdf)
+    # gdf = gdf[~gdf["obs"].isin(bad_observers)]
+    # print(f"Dropped {before - len(gdf)} records from {label} with invalid observers: {', '.join(bad_observers)}")
+
+    # replace where records is Banner Robinson -> Jackson Robinson, case sensitive + partial matching 
+    gdf["obs"] = gdf["obs"].str.replace("Banner Robinson", "Jackson Robinson", case=False, regex=True)
 
     # drop any rows where the year is < min year
     before = len(gdf)
