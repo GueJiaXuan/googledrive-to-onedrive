@@ -30,7 +30,7 @@ STANDARD_COLUMNS = [
     {"name": "year1", "datatype": "numeric", "alt_names": ["calendar_year", "year1"]}, # The normal January to December year of the observation.
     {"name": "month", "datatype": "numeric", "alt_names": ["month"]}, # Month of observation - taken from date
     {"name": "day", "datatype": "numeric", "alt_names": ["day"]},  # Day of observation - taken from date 
-    {"name": "taxa", "datatype": "text", "alt_names": ["taxa"]},  # Taxonomic classification
+    {"name": "Taxa", "datatype": "text", "alt_names": ["taxa"]},  # Taxonomic classification
     {"name": "obs", "datatype": "text", "alt_names": ["observer", "observer name", "obs"]},  # Name of the observer
     {"name": "comment", "datatype": "text", "alt_names": ["comment"]}, # Notes or comments (optional)
     {"name": "height", "datatype": "numeric", "alt_names": ["height"]},  # Observed height (optional)
