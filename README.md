@@ -11,8 +11,15 @@ This tool automates the process of:
 
 For Microsoft Users: Please make sure you download Python from Microsoft Store NOT directly from Python site.
 
+For Mac Users: To install Geopandas and Fiona, make sure you install proj by homebrew and pyproj by pip:
+```
+brew install proj
+pip install pyproj
+```
+And the Xcode App with gdal by homebrew: `brew install gdal`.
+
 Before starting, make sure:
-- You have Python installed (version 3.9 or later is recommended)
+- You have Python installed (version 3.10+ recommended; 3.12 preferred on macOS)
 - Your computer has internet access
 - Download this set of code into your preferred directory
 - You’ve installed the required Python packages (see below)
@@ -23,7 +30,7 @@ Before starting, make sure:
    This installs the necessary packages for windows user.
 
 **Double-click `initial_run.sh`**  
-   This installs the necessary packages for mac user.
+   This creates a local `.venv` and installs packages using Python 3.10+. 
 
 3. Place the following in a folder on your computer:
    - All `.py` files (`main.py`, `brain.py`, `GoogleDriveAuthDownload.py`)
@@ -34,7 +41,7 @@ Before starting, make sure:
 
 ## Getting Started
 
-1. **Double-click `run.bat`**  
+1. **Double-click `run.bat` or `run.sh`**  
    This opens the main window.
 
 2. **In the app window**, fill in:
