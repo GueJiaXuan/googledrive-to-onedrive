@@ -1,6 +1,7 @@
 {
   "google_folder_id": "13tUCjvC4GCbD7zKCqm2XmqcWVofekkQ_nrqOimu9U35vDjtFBxBfr6jXYKBmtvtssRRgjh8F",
-  "onedrive_path": "/Users/johnny/Documents/Biodiversity Stuff/GoogleDriveToOneDrive/fourth_test",
-  "species_csv": "/Users/johnny/Documents/Biodiversity Stuff/GoogleDriveToOneDrive/species.csv",
-  "output_gpkg_path": "/Users/johnny/Documents/Biodiversity Stuff/final folder/final_no_duplicates.gpkg"
+  "onedrive_path": "C:/Users/thy02/Downloads/biodiversity vip data processing/test files",
+  "species_csv": "C:/Users/thy02/Downloads/biodiversity vip data processing/googledrive-to-onedrive/species list.csv",
+  "output_gpkg_path": "C:/Users/thy02/Downloads/All data 2025-26 app processed.gpkg",
+  "backup_directory": "C:/Users/thy02/Downloads/biodiversity vip data processing/backup"
 }
