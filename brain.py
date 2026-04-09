@@ -70,17 +70,17 @@ def standardise(gdf, label="gdf"):
         dropped = before_drop - len(gdf)
         print(f"Dropped {dropped} records from {label} with missing critical data: {', '.join(existing_critical_cols)}")
 
-    # clean text fields: strip extra whitespace and convert to title case (e.g., "will cresswell" becomes "Will Cresswell")
+    # clean text fields, excluding species column (keeps it the same): strip extra whitespace and convert to title case (e.g., "will cresswell" becomes "Will Cresswell")
     for column in STANDARD_COLUMNS:
-        if column["datatype"] == "text" and column["name"] in gdf.columns:
+        if column["datatype"] == "text" and column["name"] in gdf.columns and column["name"] != "species":
             gdf[column["name"]] = gdf[column["name"]].astype(str).str.strip().str.lower().str.title().str.replace(r'\s+', ' ', regex=True) 
 
     # special casing: species text field keeps the genus capitalised and species/sub-species lowercase e.g. "Calluna Vulgaris" should be "Calluna vulgaris"
-    if "species" in gdf.columns:
-        gdf["species"] = gdf["species"].apply(
-            lambda x: f"{x.split()[0]} {' '.join(p.lower() for p in x.split()[1:])}" 
-            if isinstance(x, str) and len(x.split()) > 1 else x
-        )
+    # if "species" in gdf.columns:
+    #     gdf["species"] = gdf["species"].apply(
+    #         lambda x: f"{x.split()[0]} {' '.join(p.lower() for p in x.split()[1:])}" 
+    #         if isinstance(x, str) and len(x.split()) > 1 else x
+    #     )
         
     # ensure all standard columns exist 
     for column in STANDARD_COLUMNS:
@@ -94,14 +94,8 @@ def standardise(gdf, label="gdf"):
     gdf = clean_invalid_rows(gdf, label=label) 
     return gdf
 
-# drop any rows with invalid observers or calendar years before 2020 (can adjust year threshold as needed)
+# change any rows with invalid observers or calendar years before 2020 (can adjust year threshold as needed)
 def clean_invalid_rows(gdf, min_year=2020, label="gdf"):
-    # drop any rows with invalid observers
-    # bad_observers = ["Jackson Robinson"] # can expand list as needed
-    # before = len(gdf)
-    # gdf = gdf[~gdf["obs"].isin(bad_observers)]
-    # print(f"Dropped {before - len(gdf)} records from {label} with invalid observers: {', '.join(bad_observers)}")
-
     # replace where records is Banner Robinson -> Jackson Robinson, case sensitive + partial matching 
     gdf["obs"] = gdf["obs"].str.replace("Banner Robinson", "Jackson Robinson", case=False, regex=True)
 
@@ -163,46 +157,50 @@ def run_pipeline(student_gpkgs_directory, species_csv, main_file, backup_folder)
     except Exception as e:  
         print(f"Error during pipeline execution: {e}")
 
-# update 'type' and 'english_name' in the GDF based on species CSV mapping
+# Fuzzy match (case & punctuation insensitive) against GDF species column
+def match_species_in_csv(gdf, species_csv):
+    # Load species CSV
+    species_df = pd.read_csv(species_csv, encoding='ISO-8859-1')
+    # Convert to lowercase, strips whitespace and punctuation e.g. so 'calluna vulgarius.' and 'Calluna Vulgaris' would match
+    species_df['_norm'] = species_df['species'].apply(
+        lambda s: re.sub(r'[^a-z0-9 ]', '', str(s).lower().strip()) if not pd.isna(s) else ""
+    )
+    species_df = species_df[species_df['_norm'] != '']
+
+    # Check for duplicates in species CSV
+    dupes = species_df['_norm'][species_df['_norm'].duplicated()].unique()
+    if len(dupes) > 0:
+        print(f"Warning: Duplicate species in CSV (keeping first): {', '.join(dupes)}")
+        species_df = species_df.drop_duplicates(subset='_norm', keep='first')
+
+    # Create mapping dictionary
+    species_map = species_df.set_index('_norm')[['type', 'english_name']].to_dict(orient='index')
+
+    # Map type and english_name from species 
+    gdf['_norm'] = gdf['species'].apply(lambda s: re.sub(r'[^a-z0-9 ]', '', str(s).lower().strip()) if not pd.isna(s) else "")
+    gdf['type'] = gdf['_norm'].map(lambda x: species_map.get(x, {}).get('type', None))
+    gdf['english_name'] = gdf['_norm'].map(lambda x: species_map.get(x, {}).get('english_name', None))
+
+    unmatched = sorted(set(gdf['_norm']) - set(species_map.keys()))
+    gdf = gdf.drop(columns=['_norm'])
+    return gdf, unmatched
+
+# Update 'type' and 'english_name' in the GDF based on species CSV mapping
 def update_species_info(gdf, species_csv, label="gdf"):
     try:
-        # Load species CSV
-        species_df = pd.read_csv(species_csv, encoding='ISO-8859-1')
-        species_df['species'] = species_df['species'].str.strip().str.lower()  # lowercase for case-insensitive matching
-        species_df = species_df[species_df['species'] != '']
-
-        # Check for duplicates in species CSV
-        dupes = species_df['species'][species_df['species'].duplicated()].unique()
-        if len(dupes) > 0:
-            print(f"Warning: Duplicate species in CSV (keeping first occurrence): {', '.join(dupes)}")
-            species_df = species_df.drop_duplicates(subset='species', keep='first')
-
-        # Create mapping dictionary
-        species_map = species_df.set_index('species')[['type', 'english_name']].to_dict(orient='index')
-
-        # Map type and english_name, using lowercase for GPKG species
-        gdf['species_lower'] = gdf['species'].str.strip().str.lower()
-        gdf['type'] = gdf['species_lower'].map(lambda x: species_map.get(x, {}).get('type', None))
-        gdf['english_name'] = gdf['species_lower'].map(lambda x: species_map.get(x, {}).get('english_name', None))
-
         # Identify species missing from CSV
-        missing_species = sorted(set(gdf['species_lower']) - set(species_map.keys()))
-        if missing_species:
-            print(f"Warning: Dropping {len(missing_species)} records from {label} with species not in the species CSV list:")
-            for sp in missing_species[:10]:  # print first 10 for debug
-                print(f" - {sp}")
-            if len(missing_species) > 10:
-                print(f" - ... and {len(missing_species) - 10} more")
-            
-            # Drop rows with species not in the list
-            gdf = gdf[gdf['species_lower'].isin(species_map.keys())]
-
-        # Drop the temporary lowercase column
-        gdf = gdf.drop(columns=['species_lower'])
-
+        gdf, unmatched = match_species_in_csv(gdf, species_csv)
+        if unmatched:
+            print(f"Warning: Dropping {len(unmatched)} unmatched species from {label}:")
+            for sp in unmatched[:10]:
+                print(f"  - {sp}")
+            if len(unmatched) > 10:
+                print(f"  - ... and {len(unmatched) - 10} more")
+            gdf = gdf[gdf['species'].apply(
+                lambda s: re.sub(r'[^a-z0-9 ]', '', str(s).lower().strip()) not in unmatched
+            )]
     except Exception as e:
         print(f"Error updating species info: {e}")
-
     return gdf
 
 # Makes a backup copy of the main GPKG before merging new data (e.g., copying the file to a backup folder with a timestamp)
