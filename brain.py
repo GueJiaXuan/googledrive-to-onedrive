@@ -9,9 +9,9 @@ from shapely import Point, wkt
 from shapely.geometry.base import BaseGeometry
 
 # Requirements
-# - robust against small data format changes
-# - flexibility so all columns are processed even with different variable names, formats
-# - additional species name and type data added by matching with attached species list 
+#   robust against small data format changes
+#   flexibility so all columns are processed even with different variable names, formats
+#   additional species name and type data added by matching with attached species list 
 
 # Example data: 
 # geom (hidden), fid (auto), year, month, day, species, date, observer, height, radius, photoid, count, year1, comment, type, english_name, taxa
@@ -46,7 +46,8 @@ def standardise(gdf, label="gdf"):
             gdf[column["name"]] = None 
         return gdf
     
-    # clean column names: removes extra whitespace, converts to lowercase, and replaces spaces with underscores (e.g., "English Name" becomes "english_name") to help with mapping to the expected column names in the pipeline
+    # clean input column names: removes extra whitespace, converts to lowercase, and replaces spaces with underscores (e.g., "English Name" becomes "english_name") 
+    # to help with mapping to the expected column names in the pipeline
     gdf.columns = gdf.columns.str.strip().str.lower().str.replace(" ", "_")
 
     # map any alternative column names to the standard column names
@@ -70,17 +71,10 @@ def standardise(gdf, label="gdf"):
         dropped = before_drop - len(gdf)
         print(f"Dropped {dropped} records from {label} with missing critical data: {', '.join(existing_critical_cols)}")
 
-    # clean text fields, excluding species column (keeps it the same): strip extra whitespace and convert to title case (e.g., "will cresswell" becomes "Will Cresswell")
+    # clean text fields, excluding species column (keeps species format the same): strip extra whitespace and convert to title case (e.g., "will cresswell" becomes "Will Cresswell")
     for column in STANDARD_COLUMNS:
         if column["datatype"] == "text" and column["name"] in gdf.columns and column["name"] != "species":
             gdf[column["name"]] = gdf[column["name"]].astype(str).str.strip().str.lower().str.title().str.replace(r'\s+', ' ', regex=True) 
-
-    # special casing: species text field keeps the genus capitalised and species/sub-species lowercase e.g. "Calluna Vulgaris" should be "Calluna vulgaris"
-    # if "species" in gdf.columns:
-    #     gdf["species"] = gdf["species"].apply(
-    #         lambda x: f"{x.split()[0]} {' '.join(p.lower() for p in x.split()[1:])}" 
-    #         if isinstance(x, str) and len(x.split()) > 1 else x
-    #     )
         
     # ensure all standard columns exist 
     for column in STANDARD_COLUMNS:
