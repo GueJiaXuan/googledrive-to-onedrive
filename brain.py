@@ -224,7 +224,7 @@ def read_student_gpkgs(directory):
             print(f"Skipping {os.path.basename(path)}: {e}")
     if not combined_data:
         print("No valid student data found.")
-        return None
+        return gpd.GeoDataFrame(columns=[col["name"] for col in STANDARD_COLUMNS])
     combined_gdf = pd.concat(combined_data, ignore_index=True)
     return combined_gdf
 
